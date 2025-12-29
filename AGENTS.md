@@ -1,4 +1,5 @@
 # Project: PRISM Personalities (VST/AU) plugin using JUCE (C++)
+Slug: personalities
 
 ## Identity check (always do this first)
 - Confirm the working directory is this JUCE plugin project: personalities
