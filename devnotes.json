@@ -4,7 +4,7 @@
     "alias": "Personalities",
     "author": "William Evans, PhD",
     "description": "JUCE/C++ plugin for Studio One (macOS). Currently passes through live MIDI input; fixed-millisecond delay + processing planned for M3. Outputs MIDI for routing into a synth track.",
-    "version": "0.0.4",
+    "version": "0.0.5",
     "repo_folder": "personalities",
     "slug": "personalities",
     "host_target": "Studio One (macOS)",

@@ -76,3 +76,8 @@ juce::AudioProcessorEditor* PluginProcessor::createEditor()
 {
     return new PluginEditor (*this);
 }
+
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+    return new PluginProcessor();
+}
