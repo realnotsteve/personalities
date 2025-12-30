@@ -3,8 +3,8 @@
     "project_name": "Personalities (PRISM) MIDI Delay (Proof of Concept)",
     "alias": "Personalities",
     "author": "William Evans, PhD",
-    "description": "JUCE/C++ plugin for Studio One (macOS). Takes live MIDI input, applies fixed-millisecond delay plus processing, and outputs MIDI for routing into a synth track.",
-    "version": "0.0.3",
+    "description": "JUCE/C++ plugin for Studio One (macOS). Currently passes through live MIDI input; fixed-millisecond delay + processing planned for M3. Outputs MIDI for routing into a synth track.",
+    "version": "0.0.4",
     "repo_folder": "personalities",
     "slug": "personalities",
     "host_target": "Studio One (macOS)",
@@ -36,8 +36,8 @@
   },
   "workflows": {
     "versioning": {
-      "description": "Default bump is patch. Use PRISM_BUMP=minor|patch to control bump type per commit.",
-      "source_of_truth": "devnotes.json meta.version",
+      "description": "Default bump is patch. Use PRISM_BUMP=minor|patch to control bump type per commit. Pre-commit updates devnotes.json only; CMakeLists.txt version is manual.",
+      "source_of_truth": "devnotes.json meta.version (CMakeLists.txt version is not auto-updated)",
       "default_bump": "patch",
       "rules": {
         "patch": "X.Y.(Z+1)",
@@ -48,7 +48,7 @@
     "pre_commit": {
       "hook_path": ".githooks/pre-commit",
       "enable_command": "git config core.hooksPath .githooks",
-      "behavior": "On commit: bump version (default patch; PRISM_BUMP=minor|patch), update devnotes.json meta.version, prepend CHANGELOG.md entry (Summary/Description/Files) from staged files and env overrides. Default Summary uses prefix 'PERSONALITIES (PRISM):'.",
+      "behavior": "On commit: bump version (default patch; PRISM_BUMP=minor|patch), update devnotes.json meta.version, prepend CHANGELOG.md entry (Summary/Description/Files) from staged files and env overrides. Default Summary uses prefix \"PERSONALITIES (PRISM):\".",
       "env_overrides": {
         "PRISM_BUMP": "minor|patch (default patch)",
         "PRISM_CHANGELOG_SUMMARY": "Override the changelog Summary line",
@@ -58,7 +58,7 @@
     },
     "prepare_commit_msg": {
       "hook_path": ".githooks/prepare-commit-msg",
-      "behavior": "If the commit message is empty, auto-fill a default subject. Override with PRISM_COMMIT_MSG env var or by typing your own message. Default subject uses prefix 'PERSONALITIES (PRISM):'.",
+      "behavior": "If the commit message is empty, auto-fill a default subject and append a Files footer with up to 3 staged paths. Override with PRISM_COMMIT_MSG env var or by typing your own message. Default subject uses prefix \"PERSONALITIES (PRISM):\".",
       "env_overrides": {
         "PRISM_COMMIT_MSG": "Override default commit subject"
       },
@@ -112,6 +112,7 @@
     ]
   },
   "runtime_rules": {
+    "status": "M2 is MIDI pass-through; fixed_ms scheduling planned for M3.",
     "realtime_safe": [
       "No allocations, no locks, no file/network IO in processBlock",
       "No logging/printf in audio thread",

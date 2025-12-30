@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 DEFAULT_BUMP = "patch"
+DEFAULT_SUMMARY_PREFIX = "PERSONALITIES (PRISM):"
 DEVNOTES_NAME = "devnotes.json"
 CHANGELOG_NAME = "CHANGELOG.md"
 
@@ -112,9 +113,9 @@ def main() -> int:
     # Heuristic default summary if none provided
     if not summary:
         if len(files) == 1:
-            summary = f"Update {files[0]}"
+            summary = f"{DEFAULT_SUMMARY_PREFIX} Update {files[0]}"
         else:
-            summary = f"Update {len(files)} files"
+            summary = f"{DEFAULT_SUMMARY_PREFIX} Update {len(files)} files"
 
     # Load + bump version
     data = load_json(devnotes_path)

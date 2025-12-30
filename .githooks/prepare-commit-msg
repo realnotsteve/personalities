@@ -4,7 +4,7 @@ set -euo pipefail
 MSG_FILE="${1:-}"
 COMMIT_SOURCE="${2:-}"
 
-DEFAULT_SUBJECT="${PRISM_COMMIT_MSG:-PRISM: update}"
+DEFAULT_SUBJECT="${PRISM_COMMIT_MSG:-PERSONALITIES (PRISM): update}"
 
 # If message is coming from -m, merge, squash, etc., don't override.
 if [[ -n "${COMMIT_SOURCE}" ]]; then
