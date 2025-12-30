@@ -9,7 +9,7 @@ namespace
 PluginEditor::PluginEditor (PluginProcessor& p)
 : juce::AudioProcessorEditor (&p), processor (p)
 {
-    referenceLabel.setText ("Reference MIDI", juce::dontSendNotification);
+    referenceLabel.setText ("Personality", juce::dontSendNotification);
     referenceLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (referenceLabel);
 
@@ -33,27 +33,41 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     FileSorter sorter;
     referenceFiles.sort (sorter);
 
-    referenceBox.addItem ("Select MIDI...", 1);
+    referenceBox.clear();
     for (int i = 0; i < referenceFiles.size(); ++i)
-        referenceBox.addItem (referenceFiles[i].getFileName(), i + 2);
+        referenceBox.addItem (referenceFiles[i].getFileNameWithoutExtension(), i + 1);
 
+    referenceBox.setTextWhenNoChoicesAvailable ("No personalities found");
     addAndMakeVisible (referenceBox);
-    referenceBox.setEnabled (! referenceFiles.isEmpty());
+
+    if (referenceFiles.isEmpty())
+    {
+        referenceBox.setTextWhenNothingSelected ("No personalities found");
+        referenceBox.setSelectedId (0, juce::dontSendNotification);
+        referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
+        referenceBox.setEnabled (false);
+    }
+    else
+    {
+        referenceBox.setTextWhenNothingSelected ("Select personality...");
+        referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::white);
+        referenceBox.setEnabled (true);
+    }
 
     referenceBox.onChange = [this]
     {
         const int selectedId = referenceBox.getSelectedId();
-        if (selectedId <= 1)
+        if (selectedId <= 0)
             return;
 
-        const int index = selectedId - 2;
+        const int index = selectedId - 1;
         if (! juce::isPositiveAndBelow (index, referenceFiles.size()))
             return;
 
         juce::String errorMessage;
         if (processor.loadReferenceFromFile (referenceFiles[index], errorMessage))
         {
-            referenceStatusLabel.setText ("Loaded: " + referenceFiles[index].getFileName(),
+            referenceStatusLabel.setText ("Loaded: " + referenceFiles[index].getFileNameWithoutExtension(),
                 juce::dontSendNotification);
         }
         else
@@ -69,18 +83,15 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         {
             if (referenceFiles[i].getFullPathName() == currentPath)
             {
-                referenceBox.setSelectedId (i + 2, juce::dontSendNotification);
-                referenceStatusLabel.setText ("Loaded: " + referenceFiles[i].getFileName(),
+                referenceBox.setSelectedId (i + 1, juce::dontSendNotification);
+                referenceStatusLabel.setText ("Loaded: " + referenceFiles[i].getFileNameWithoutExtension(),
                     juce::dontSendNotification);
                 break;
             }
         }
     }
 
-    if (referenceFiles.isEmpty() && referenceStatusLabel.getText().isEmpty())
-        referenceStatusLabel.setText ("No MIDI files found in ~/Downloads/PRISM/",
-            juce::dontSendNotification);
-    else if (referenceStatusLabel.getText().isEmpty())
+    if (! referenceFiles.isEmpty() && referenceStatusLabel.getText().isEmpty())
         referenceStatusLabel.setText ("No reference loaded.", juce::dontSendNotification);
 
     slackLabel.setText ("Slack (ms)", juce::dontSendNotification);

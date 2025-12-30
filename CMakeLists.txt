@@ -46,3 +46,16 @@ target_compile_definitions(Personalities PRIVATE
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
 )
+
+option(PERSONALITIES_COPY_VST3 "Copy VST3 to user plugin folder after build" ON)
+
+if(APPLE AND PERSONALITIES_COPY_VST3)
+    set(PERSONALITIES_VST3_INSTALL_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/VST3")
+    add_custom_command(TARGET Personalities_VST3 POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${PERSONALITIES_VST3_INSTALL_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "$<TARGET_BUNDLE_DIR:Personalities_VST3>"
+            "${PERSONALITIES_VST3_INSTALL_DIR}/Personalities.vst3"
+        COMMENT "Copying Personalities.vst3 to ${PERSONALITIES_VST3_INSTALL_DIR}"
+    )
+endif()
