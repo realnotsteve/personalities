@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MSG_FILE="${1:-}"
+COMMIT_SOURCE="${2:-}"
+
+DEFAULT_SUBJECT="${PRISM_COMMIT_MSG:-PRISM: update}"
+
+# If message is coming from -m, merge, squash, etc., don't override.
+if [[ -n "${COMMIT_SOURCE}" ]]; then
+  exit 0
+fi
+
+# If the message file already has any non-comment content, don't override.
+if [[ -f "$MSG_FILE" ]]; then
+  if grep -vE '^\s*#' "$MSG_FILE" | grep -qE '\S'; then
+    exit 0
+  fi
+fi
+
+# Build a tiny context footer: first 3 staged files
+FILES="$(git diff --cached --name-only | head -n 3 | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+FOOTER=""
+if [[ -n "$FILES" ]]; then
+  FOOTER=$'\n\n'"Files: ${FILES}"
+fi
+
+printf "%s%s\n" "$DEFAULT_SUBJECT" "$FOOTER" > "$MSG_FILE"

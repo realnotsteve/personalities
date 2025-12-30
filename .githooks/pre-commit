@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import List, Tuple
+
+DEFAULT_BUMP = "patch"
+DEVNOTES_NAME = "devnotes.json"
+CHANGELOG_NAME = "CHANGELOG.md"
+
+
+def run(cmd: List[str], *, check: bool = True, text: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, check=check, text=text, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
+def git_root() -> Path:
+    p = run(["git", "rev-parse", "--show-toplevel"])
+    return Path(p.stdout.strip())
+
+
+def staged_files() -> List[str]:
+    p = run(["git", "diff", "--cached", "--name-only"])
+    files = [line.strip() for line in p.stdout.splitlines() if line.strip()]
+    return files
+
+
+def parse_semver(v: str) -> Tuple[int, int, int]:
+    parts = v.strip().split(".")
+    if len(parts) != 3:
+        raise ValueError(f"Version must be MAJOR.MINOR.PATCH (got: {v})")
+    return int(parts[0]), int(parts[1]), int(parts[2])
+
+
+def bump_version(v: str, bump: str) -> str:
+    major, minor, patch = parse_semver(v)
+    bump = (bump or "").strip().lower()
+    if bump == "minor":
+        minor += 1
+        patch = 0
+    else:  # default patch
+        patch += 1
+    return f"{major}.{minor}.{patch}"
+
+
+def load_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_json(path: Path, data: dict) -> None:
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def ensure_changelog_header(existing: str) -> str:
+    if existing.lstrip().startswith("# Changelog"):
+        return existing
+    if existing.strip() == "":
+        return "# Changelog\n\n"
+    # If file exists but doesn't start with header, add one on top.
+    return "# Changelog\n\n" + existing.lstrip()
+
+
+def make_entry(version: str, files: List[str], summary: str, desc: str) -> str:
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    lines = []
+    lines.append(f"## v{version} ({date_str})")
+    lines.append("")
+    if summary:
+        lines.append(f"- **Summary:** {summary}")
+    if desc:
+        lines.append(f"- **Description:** {desc}")
+    if files:
+        lines.append("- **Files:**")
+        for f in files:
+            lines.append(f"  - `{f}`")
+    else:
+        lines.append("- **Files:** (none)")
+    lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def stage(paths: List[Path]) -> None:
+    if not paths:
+        return
+    run(["git", "add"] + [str(p) for p in paths])
+
+
+def main() -> int:
+    try:
+        root = git_root()
+    except Exception as e:
+        print(f"[pre-commit] Not a git repo? {e}", file=sys.stderr)
+        return 1
+
+    # If nothing staged, do nothing (don’t block).
+    files = staged_files()
+    if not files:
+        return 0
+
+    devnotes_path = root / DEVNOTES_NAME
+    if not devnotes_path.exists():
+        print(f"[pre-commit] {DEVNOTES_NAME} not found at repo root: {devnotes_path}", file=sys.stderr)
+        print("[pre-commit] Skipping version bump/changelog.", file=sys.stderr)
+        return 0
+
+    bump = os.environ.get("PRISM_BUMP", DEFAULT_BUMP)
+    summary = os.environ.get("PRISM_CHANGELOG_SUMMARY", "").strip()
+    desc = os.environ.get("PRISM_CHANGELOG_DESC", "").strip()
+
+    # Heuristic default summary if none provided
+    if not summary:
+        if len(files) == 1:
+            summary = f"Update {files[0]}"
+        else:
+            summary = f"Update {len(files)} files"
+
+    # Load + bump version
+    data = load_json(devnotes_path)
+    current = (((data.get("meta") or {}).get("version")) or "").strip()
+    if not current:
+        current = "0.0.0"
+        data.setdefault("meta", {})["version"] = current
+
+    new_version = bump_version(current, bump)
+    data.setdefault("meta", {})["version"] = new_version
+    save_json(devnotes_path, data)
+
+    # Update changelog (prepend entry)
+    changelog_path = root / CHANGELOG_NAME
+    existing = changelog_path.read_text(encoding="utf-8") if changelog_path.exists() else ""
+    existing = ensure_changelog_header(existing)
+
+    entry = make_entry(new_version, files, summary, desc)
+
+    # Insert right after the "# Changelog" header block
+    if existing.lstrip().startswith("# Changelog"):
+        lines = existing.splitlines(True)
+        # find first blank line after header to insert after it
+        insert_at = 0
+        # Keep header line
+        insert_at = 1
+        # Keep following blank line(s)
+        while insert_at < len(lines) and lines[insert_at].strip() == "":
+            insert_at += 1
+        new_text = "".join(lines[:insert_at]) + entry + "".join(lines[insert_at:])
+    else:
+        new_text = entry + existing
+
+    changelog_path.write_text(new_text, encoding="utf-8")
+
+    # Stage the files the hook modified
+    stage([devnotes_path, changelog_path])
+
+    print(f"[pre-commit] PRISM: bumped version to {new_version} ({bump}) and updated changelog.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
