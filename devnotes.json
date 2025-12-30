@@ -1,0 +1,229 @@
+{
+  "meta": {
+    "project_name": "Personalities (PRISM) MIDI Delay (Proof of Concept)",
+    "alias": "Personalities",
+    "author": "William Evans, PhD",
+    "description": "JUCE/C++ plugin for Studio One (macOS). Takes live MIDI input, applies fixed-millisecond delay plus processing, and outputs MIDI for routing into a synth track.",
+    "version": "0.0.2",
+    "repo_folder": "personalities",
+    "slug": "personalities",
+    "host_target": "Studio One (macOS)",
+    "formats": [
+      "VST3"
+    ],
+    "framework": "JUCE 8",
+    "build_system": "CMake",
+    "ide": "VS Code",
+    "manufacturer_name": "PRISM",
+    "plugin_display_name": "Personalities",
+    "bundle_id": "com.aureality.personalities",
+    "codes": {
+      "plugin_manufacturer_code": "Aurl",
+      "plugin_code": "pERS"
+    },
+    "commit_prefix": "PERSONALITIES (PRISM):"
+  },
+  "goals": {
+    "scope": [
+      "Local proof-of-concept only",
+      "Single-user, single-machine",
+      "No distribution, no installer"
+    ],
+    "primary_workflow": [
+      "Track A: plugin receives MIDI from controller (Monitor ON)",
+      "Track B: synth receives MIDI from Track A/plugin MIDI output (Monitor ON)"
+    ]
+  },
+  "workflows": {
+    "versioning": {
+      "description": "Default bump is patch. Use PRISM_BUMP=minor|patch to control bump type per commit.",
+      "source_of_truth": "devnotes.json meta.version",
+      "default_bump": "patch",
+      "rules": {
+        "patch": "X.Y.(Z+1)",
+        "minor": "X.(Y+1).0",
+        "major": "(not used for this proof-of-concept)"
+      }
+    },
+    "pre_commit": {
+      "hook_path": ".githooks/pre-commit",
+      "enable_command": "git config core.hooksPath .githooks",
+      "behavior": "On commit: bump version (default patch; PRISM_BUMP=minor|patch), update devnotes.json meta.version, prepend CHANGELOG.md entry (Summary/Description/Files) from staged files and env overrides. Default Summary uses prefix 'PERSONALITIES (PRISM):'.",
+      "env_overrides": {
+        "PRISM_BUMP": "minor|patch (default patch)",
+        "PRISM_CHANGELOG_SUMMARY": "Override the changelog Summary line",
+        "PRISM_CHANGELOG_DESC": "Override the changelog Description line"
+      },
+      "runtime": "Requires python3 in PATH; hook exits if missing."
+    },
+    "prepare_commit_msg": {
+      "hook_path": ".githooks/prepare-commit-msg",
+      "behavior": "If the commit message is empty, auto-fill a default subject. Override with PRISM_COMMIT_MSG env var or by typing your own message. Default subject uses prefix 'PERSONALITIES (PRISM):'.",
+      "env_overrides": {
+        "PRISM_COMMIT_MSG": "Override default commit subject"
+      },
+      "default_message": "PERSONALITIES (PRISM): update"
+    },
+    "after_push": {
+      "description": "After the user confirms a push, review the changelog entry and staged files to verify what changed."
+    }
+  },
+  "build": {
+    "juce_in_repo": {
+      "method": "git_submodule",
+      "path": "JUCE/",
+      "pin_policy": "Pin to a JUCE 8 tag/commit; update explicitly and commit the pointer."
+    },
+    "plugin_install_paths_macos": {
+      "vst3": "~/Library/Audio/Plug-Ins/VST3/",
+      "au_component": "~/Library/Audio/Plug-Ins/Components/"
+    },
+    "notes": [
+      "Prefer VST3 first for Studio One reliability; AU optional later.",
+      "Keep builds incremental; test often in Studio One."
+    ]
+  },
+  "plugin_contract": {
+    "type": "instrument_style_midi_processor",
+    "midi_in": true,
+    "midi_out": true,
+    "is_midi_effect": false,
+    "is_synth": true,
+    "audio_io": "silent_or_minimal_if_needed",
+    "bundle_id": "com.aureality.personalities",
+    "manufacturer": "PRISM",
+    "product": "Personalities",
+    "manufacturer_codes": {
+      "plugin_manufacturer_code": "Aurl",
+      "plugin_code": "pERS"
+    },
+    "parameters": [
+      {
+        "id": "delay_ms",
+        "name": "Delay (ms)",
+        "range": {
+          "min": 0.0,
+          "max": 500.0
+        },
+        "default": 50.0,
+        "units": "ms",
+        "automation": "optional"
+      }
+    ]
+  },
+  "runtime_rules": {
+    "realtime_safe": [
+      "No allocations, no locks, no file/network IO in processBlock",
+      "No logging/printf in audio thread",
+      "Preallocate in prepareToPlay"
+    ],
+    "timing": {
+      "delay_mode": "fixed_ms",
+      "delay_samples_formula": "delaySamples = round(sampleRate * delayMs / 1000.0)",
+      "scheduling": "Sample-accurate across blocks using absolute sample timeline and dueSample"
+    },
+    "midi_message_coverage": [
+      "note on/off",
+      "CC (including CC64 sustain)",
+      "pitch bend",
+      "aftertouch/channel pressure",
+      "program change (optional)"
+    ],
+    "overflow_policy": {
+      "status": "TBD",
+      "recommendations": [
+        "Pass-through without delay when full (best for live play)",
+        "OR drop newest events when full (simpler but may feel glitchy)"
+      ]
+    }
+  },
+  "implementation_plan": {
+    "milestones": [
+      "M1: VST3 builds + loads in Studio One",
+      "M2: MIDI pass-through (no delay) verified via routing",
+      "M3: Fixed-ms delay scheduling with preallocated queue",
+      "M4: UI slider + parameter binding",
+      "M5: Stress test: fast playing + sustain + parameter changes (if enabled)"
+    ],
+    "queue_design": {
+      "data": "Ring buffer of scheduled MIDI events {dueSample:uint64, msg:MidiMessage, order:uint64(optional)}",
+      "timeline": "uint64 timelineSample increments by numSamples each block",
+      "enqueue": "dueSample = timelineSample + sampleOffset + delaySamples",
+      "emit": "Emit all queued events whose dueSample falls within [timelineSample, timelineSample + numSamples)",
+      "ordering": "Preserve ordering when multiple events share the same dueSample"
+    }
+  },
+  "testing_notes": {
+    "studio_one_live_routing": [
+      "Track A: this plugin, input=controller, Monitor ON",
+      "Track B: synth, input=Track A/plugin MIDI output, Monitor ON"
+    ],
+    "common_failures": [
+      "No MIDI output visible in host",
+      "Stuck notes (note-off/sustain not delayed consistently)",
+      "Queue overflow under heavy playing",
+      "Unexpected latency beyond delayMs (monitoring/routing settings)"
+    ]
+  },
+  "repo_conventions": {
+    "agents": [
+      "Project AGENTS.md at repo root governs this workspace; overrides global ~/.codex/AGENTS.md"
+    ],
+    "output_style": [
+      "Do not print whole files unless asked",
+      "Prefer small diffs and clear file paths"
+    ]
+  },
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "group": "codex",
+      "role": "Project-specific rules for Codex/LLM"
+    },
+    {
+      "path": "devnotes.json",
+      "group": "docs",
+      "role": "Project dev notes + workflow automation spec"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "group": "docs",
+      "role": "Auto-maintained changelog (prepended per commit)"
+    },
+    {
+      "path": ".githooks/pre-commit",
+      "group": "git",
+      "role": "Auto-bump version + changelog entry"
+    },
+    {
+      "path": ".githooks/prepare-commit-msg",
+      "group": "git",
+      "role": "Default commit message when empty"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "group": "build",
+      "role": "JUCE/CMake build entrypoint (juce_add_plugin uses codes + bundle id above)"
+    },
+    {
+      "path": "Source/PluginProcessor.h",
+      "group": "src",
+      "role": "AudioProcessor + MIDI delay scheduling"
+    },
+    {
+      "path": "Source/PluginProcessor.cpp",
+      "group": "src",
+      "role": "Implementation of MIDI queue + processBlock"
+    },
+    {
+      "path": "Source/PluginEditor.h",
+      "group": "src",
+      "role": "Editor definition"
+    },
+    {
+      "path": "Source/PluginEditor.cpp",
+      "group": "src",
+      "role": "UI slider + parameter attachments"
+    }
+  ]
+}
