@@ -3,8 +3,8 @@
     "project_name": "Personalities (PRISM) MIDI Delay (Proof of Concept)",
     "alias": "Personalities",
     "author": "William Evans, PhD",
-    "description": "JUCE/C++ plugin for Studio One (macOS). Currently passes through live MIDI input; fixed-millisecond delay + processing planned for M3. Outputs MIDI for routing into a synth track.",
-    "version": "0.0.5",
+    "description": "JUCE/C++ plugin for Studio One (macOS). Loads a reference MIDI performance, then interpolates user note timing/velocity toward the reference using a fixed Slack buffer and a Correction control.",
+    "version": "0.0.6",
     "repo_folder": "personalities",
     "slug": "personalities",
     "host_target": "Studio One (macOS)",
@@ -100,35 +100,44 @@
     "parameters": [
       {
         "id": "delay_ms",
-        "name": "Delay (ms)",
+        "name": "Slack (ms)",
         "range": {
           "min": 0.0,
-          "max": 500.0
+          "max": 2000.0
         },
         "default": 50.0,
         "units": "ms",
+        "automation": "optional"
+      },
+      {
+        "id": "correction",
+        "name": "Correction",
+        "range": {
+          "min": 0.0,
+          "max": 1.0
+        },
+        "default": 0.0,
+        "units": "ratio",
         "automation": "optional"
       }
     ]
   },
   "runtime_rules": {
-    "status": "M2 is MIDI pass-through; fixed_ms scheduling planned for M3.",
+    "status": "M3 fixed_ms scheduling implemented with preallocated queue; note timing/velocity interpolation uses the reference performance with Slack always applied and oversized (>8 byte) messages dropped.",
     "realtime_safe": [
       "No allocations, no locks, no file/network IO in processBlock",
       "No logging/printf in audio thread",
       "Preallocate in prepareToPlay"
     ],
     "timing": {
-      "delay_mode": "fixed_ms",
-      "delay_samples_formula": "delaySamples = round(sampleRate * delayMs / 1000.0)",
+      "delay_mode": "fixed_ms (Slack)",
+      "delay_samples_formula": "slackSamples = round(sampleRate * slackMs / 1000.0)",
       "scheduling": "Sample-accurate across blocks using absolute sample timeline and dueSample"
     },
     "midi_message_coverage": [
-      "note on/off",
-      "CC (including CC64 sustain)",
-      "pitch bend",
-      "aftertouch/channel pressure",
-      "program change (optional)"
+      "note on/off (corrected)",
+      "velocity (corrected)",
+      "other MIDI messages delayed by Slack (unchanged)"
     ],
     "overflow_policy": {
       "status": "TBD",

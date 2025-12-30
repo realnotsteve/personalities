@@ -14,10 +14,18 @@ public:
 private:
     PluginProcessor& processor;
 
-    juce::Slider delaySlider;
-    juce::Label  delayLabel;
+    juce::ComboBox referenceBox;
+    juce::Label referenceLabel;
+    juce::Label referenceStatusLabel;
 
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> delayAttachment;
+    juce::Slider slackSlider;
+    juce::Label  slackLabel;
+    juce::Slider correctionSlider;
+    juce::Label  correctionLabel;
+
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> slackAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> correctionAttachment;
+    juce::Array<juce::File> referenceFiles;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 };

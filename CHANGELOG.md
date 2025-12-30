@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.6 (2025-12-29)
+
+- **Summary:** PERSONALITIES (PRISM): Update 5 files
+- **Files:**
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `Source/PluginProcessor.cpp`
+  - `Source/PluginProcessor.h`
+  - `devnotes.json`
+
 ## v0.0.5 (2025-12-29)
 
 - **Summary:** PERSONALITIES (PRISM): Update 225 files
