@@ -4,12 +4,13 @@
     "alias": "Personalities",
     "author": "William Evans, PhD",
     "description": "JUCE/C++ plugin for Studio One (macOS). Loads a reference MIDI performance, then interpolates user note timing/velocity toward the reference using a fixed Slack buffer and a Correction control.",
-    "version": "0.0.7",
+    "version": "0.0.8",
     "repo_folder": "personalities",
     "slug": "personalities",
     "host_target": "Studio One (macOS)",
     "formats": [
-      "VST3"
+      "VST3",
+      "VST3 (Note FX)"
     ],
     "framework": "JUCE 8",
     "build_system": "CMake",
@@ -80,7 +81,8 @@
     },
     "notes": [
       "Prefer VST3 first for Studio One reliability; AU optional later.",
-      "Keep builds incremental; test often in Studio One."
+      "Keep builds incremental; test often in Studio One.",
+      "Note FX build target: Personalities_NoteFX (MIDI effect for routing into instruments)."
     ]
   },
   "plugin_contract": {

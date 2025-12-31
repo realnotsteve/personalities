@@ -7,6 +7,9 @@ namespace
 {
     constexpr const char* kParamDelayMs = "delay_ms";
     constexpr const char* kParamCorrection = "correction";
+    constexpr const char* kParamMute = "mute";
+    constexpr const char* kParamBypass = "bypass";
+    constexpr const char* kParamVelocityCorrection = "velocity_correction";
     constexpr const char* kReferencePathProperty = "reference_path";
     constexpr float kMaxSlackMs = 2000.0f;
 
@@ -37,11 +40,17 @@ namespace
 PluginProcessor::PluginProcessor()
 : juce::AudioProcessor (
       BusesProperties()
-        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+       #if ! JucePlugin_IsMidiEffect
+        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+       #endif
+      ),
   apvts (*this, nullptr, "PARAMS", createParameterLayout())
 {
     delayMsParam = apvts.getRawParameterValue (kParamDelayMs);
     correctionParam = apvts.getRawParameterValue (kParamCorrection);
+    muteParam = apvts.getRawParameterValue (kParamMute);
+    bypassParam = apvts.getRawParameterValue (kParamBypass);
+    velocityCorrectionParam = apvts.getRawParameterValue (kParamVelocityCorrection);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParameterLayout()
@@ -62,7 +71,40 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         0.0f
     ));
 
+    layout.add (std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID { kParamMute, 1 },
+        "Mute",
+        false
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID { kParamBypass, 1 },
+        "Bypass",
+        false
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID { kParamVelocityCorrection, 1 },
+        "Velocity Correction",
+        true
+    ));
+
     return layout;
+}
+
+uint32_t PluginProcessor::getInputNoteOnCounter() const noexcept
+{
+    return inputNoteOnCounter.load (std::memory_order_relaxed);
+}
+
+uint32_t PluginProcessor::getOutputNoteOnCounter() const noexcept
+{
+    return outputNoteOnCounter.load (std::memory_order_relaxed);
+}
+
+float PluginProcessor::getLastTimingDeltaMs() const noexcept
+{
+    return lastTimingDeltaMs.load (std::memory_order_relaxed);
 }
 
 void PluginProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
@@ -92,11 +134,16 @@ void PluginProcessor::releaseResources()
 
 bool PluginProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
+   #if JucePlugin_IsMidiEffect
+    return layouts.getMainInputChannelSet() == juce::AudioChannelSet::disabled()
+        && layouts.getMainOutputChannelSet() == juce::AudioChannelSet::disabled();
+   #else
     // We expect no input bus and a stereo output bus.
     if (layouts.getMainInputChannelSet() != juce::AudioChannelSet::disabled())
         return false;
 
     return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
+   #endif
 }
 
 void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -107,6 +154,10 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     buffer.clear();
 
     outputBuffer.clear();
+    const bool isMuted = (muteParam != nullptr) && (muteParam->load() >= 0.5f);
+    const bool isBypassed = (bypassParam != nullptr) && (bypassParam->load() >= 0.5f);
+    if (isMuted || isBypassed)
+        queueSize = 0;
 
     const int numSamples = buffer.getNumSamples();
     bool isPlaying = false;
@@ -134,16 +185,19 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
             resetPlaybackState();
             latchedSlackSamples = msToSamples (sampleRateHz, slackMs);
             timelineSample = (hostSample >= 0) ? static_cast<uint64_t> (hostSample) : 0;
+            referenceTransportStartSample = timelineSample;
         }
         else if (hostSample >= 0 && lastHostSample >= 0 && hostSample < lastHostSample)
         {
             resetPlaybackState();
             timelineSample = static_cast<uint64_t> (hostSample);
+            referenceTransportStartSample = timelineSample;
         }
     }
     else if (transportWasPlaying)
     {
         resetPlaybackState();
+        referenceTransportStartSample = 0;
     }
 
     const uint64_t blockStart = (isPlaying && hostSample >= 0)
@@ -161,11 +215,76 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         && reference->sampleTimesValid
         && ! reference->notes.empty();
     const float effectiveCorrection = hasReference ? correction : 0.0f;
+    const uint64_t referenceStartSample = hasReference ? reference->firstNoteSample : 0;
+    const bool velocityCorrectionEnabled = (velocityCorrectionParam == nullptr)
+        || (velocityCorrectionParam->load() >= 0.5f);
+
+    if (isBypassed)
+    {
+        for (const auto metadata : midi)
+        {
+            if (metadata.numBytes < 3)
+                continue;
+
+            const uint8_t* data = metadata.data;
+            const uint8_t status = static_cast<uint8_t> (data[0] & 0xF0);
+
+            if (status == 0x90 && data[2] > 0)
+            {
+                inputNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
+                lastTimingDeltaMs.store (0.0f, std::memory_order_relaxed);
+                if (! isMuted)
+                    outputNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
+
+                if (hasReference && referenceCursor < static_cast<int> (reference->notes.size()))
+                {
+                    const int refIndex = referenceCursor++;
+                    const int channel = (data[0] & 0x0F) + 1;
+                    if (activeNoteCount < kMaxActiveNotes)
+                        activeNotes[activeNoteCount++] = { static_cast<int> (data[1]), channel, refIndex };
+                }
+            }
+            else if (status == 0x80 || (status == 0x90 && data[2] == 0))
+            {
+                if (hasReference)
+                {
+                    const int channel = (data[0] & 0x0F) + 1;
+                    for (int i = activeNoteCount - 1; i >= 0; --i)
+                    {
+                        if (activeNotes[i].noteNumber == data[1] && activeNotes[i].channel == channel)
+                        {
+                            activeNotes[i] = activeNotes[activeNoteCount - 1];
+                            --activeNoteCount;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (isMuted)
+            midi.clear();
+
+        timelineSample = blockEnd;
+        lastHostSample = hostSample;
+        transportWasPlaying = isPlaying;
+        return;
+    }
 
     int outputEventCount = 0;
 
+    auto countOutputNoteOn = [&](const uint8_t* data, uint8_t size)
+    {
+        if (size < 3)
+            return;
+        if ((data[0] & 0xF0) == 0x90 && data[2] > 0)
+            outputNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
+    };
+
     auto enqueueEvent = [&](const uint8_t* data, uint8_t size, uint64_t dueSample, int passThroughOffset)
     {
+        if (isMuted)
+            return;
         if (queueSize < kMaxQueuedEvents)
         {
             ScheduledMidiEvent event;
@@ -180,6 +299,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         {
             // Queue overflow: pass through without delay.
             outputBuffer.addEvent (data, size, passThroughOffset);
+            countOutputNoteOn (data, size);
             ++outputEventCount;
         }
     };
@@ -206,6 +326,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 
             if (status == 0x90 && data[2] > 0)
             {
+                inputNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
                 int refIndex = -1;
                 const ReferenceNote* refNote = nullptr;
 
@@ -215,10 +336,22 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     refNote = &reference->notes[refIndex];
                 }
 
-                const uint64_t refSample = (refNote != nullptr) ? refNote->onSample : userSample;
+                const uint64_t alignedRefSample = (refNote != nullptr && refNote->onSample >= referenceStartSample)
+                    ? referenceTransportStartSample + (refNote->onSample - referenceStartSample)
+                    : userSample;
+                const uint64_t correctedSample = lerpSamples (userSample, alignedRefSample, effectiveCorrection);
+                const uint64_t dueSample = slackSamples + correctedSample;
                 const uint8_t refVelocity = (refNote != nullptr) ? refNote->onVelocity : data[2];
-                const uint8_t outVelocity = lerpVelocity (data[2], refVelocity, effectiveCorrection);
-                const uint64_t dueSample = slackSamples + lerpSamples (userSample, refSample, effectiveCorrection);
+                const uint8_t outVelocity = velocityCorrectionEnabled
+                    ? lerpVelocity (data[2], refVelocity, effectiveCorrection)
+                    : data[2];
+
+                const int64_t deltaSamples = static_cast<int64_t> (correctedSample)
+                    - static_cast<int64_t> (userSample);
+                const float deltaMs = sampleRateHz > 0.0
+                    ? static_cast<float> (1000.0 * (static_cast<double> (deltaSamples) / sampleRateHz))
+                    : 0.0f;
+                lastTimingDeltaMs.store (deltaMs, std::memory_order_relaxed);
 
                 uint8_t outData[3] = { static_cast<uint8_t> (0x90 | (channel - 1)),
                                        data[1],
@@ -251,10 +384,15 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 const ReferenceNote* refNote = (refIndex >= 0 && refIndex < static_cast<int> (reference->notes.size()))
                     ? &reference->notes[refIndex]
                     : nullptr;
-                const uint64_t refSample = (refNote != nullptr) ? refNote->offSample : userSample;
+                const uint64_t alignedRefSample = (refNote != nullptr && refNote->offSample >= referenceStartSample)
+                    ? referenceTransportStartSample + (refNote->offSample - referenceStartSample)
+                    : userSample;
+                const uint64_t correctedSample = lerpSamples (userSample, alignedRefSample, effectiveCorrection);
+                const uint64_t dueSample = slackSamples + correctedSample;
                 const uint8_t refVelocity = (refNote != nullptr) ? refNote->offVelocity : data[2];
-                const uint8_t outVelocity = lerpVelocity (data[2], refVelocity, effectiveCorrection);
-                const uint64_t dueSample = slackSamples + lerpSamples (userSample, refSample, effectiveCorrection);
+                const uint8_t outVelocity = velocityCorrectionEnabled
+                    ? lerpVelocity (data[2], refVelocity, effectiveCorrection)
+                    : data[2];
 
                 uint8_t outData[3] = { static_cast<uint8_t> (0x80 | (channel - 1)),
                                        data[1],
@@ -276,6 +414,8 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 
     while (queueSize > 0)
     {
+        if (isMuted)
+            break;
         const auto& event = queue[0];
 
         if (event.dueSample >= blockEnd)
@@ -288,6 +428,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         if (outputEventCount < kMaxOutputEvents)
         {
             outputBuffer.addEvent (event.data, event.size, sampleOffset);
+            countOutputNoteOn (event.data, event.size);
             ++outputEventCount;
         }
 
@@ -340,6 +481,7 @@ void PluginProcessor::updateReferenceSampleTimes (ReferenceData& data, double sa
         note.offSample = static_cast<uint64_t> (juce::jmax (0LL, offSamples));
     }
 
+    data.firstNoteSample = data.notes.empty() ? 0 : data.notes.front().onSample;
     data.sampleRate = sampleRate;
     data.sampleTimesValid = true;
 }

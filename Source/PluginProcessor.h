@@ -26,9 +26,9 @@ public:
 
     //==============================================================================
     const juce::String getName() const override { return JucePlugin_Name; }
-    bool acceptsMidi() const override { return true; }
-    bool producesMidi() const override { return true; }
-    bool isMidiEffect() const override { return false; }
+    bool acceptsMidi() const override { return JucePlugin_WantsMidiInput; }
+    bool producesMidi() const override { return JucePlugin_ProducesMidiOutput; }
+    bool isMidiEffect() const override { return JucePlugin_IsMidiEffect; }
     double getTailLengthSeconds() const override { return 0.0; }
 
     //==============================================================================
@@ -44,6 +44,9 @@ public:
 
     bool loadReferenceFromFile (const juce::File& file, juce::String& errorMessage);
     juce::String getReferencePath() const;
+    uint32_t getInputNoteOnCounter() const noexcept;
+    uint32_t getOutputNoteOnCounter() const noexcept;
+    float getLastTimingDeltaMs() const noexcept;
 
     // Parameters
     juce::AudioProcessorValueTreeState apvts;
@@ -69,6 +72,7 @@ private:
         std::vector<ReferenceNote> notes;
         double sampleRate = 0.0;
         bool sampleTimesValid = false;
+        uint64_t firstNoteSample = 0;
     };
 
     struct ActiveNote
@@ -101,9 +105,16 @@ private:
     uint64_t timelineSample = 0;
     uint64_t orderCounter = 0;
     uint64_t latchedSlackSamples = 0;
+    uint64_t referenceTransportStartSample = 0;
     double sampleRateHz = 44100.0;
     std::atomic<float>* delayMsParam = nullptr;
     std::atomic<float>* correctionParam = nullptr;
+    std::atomic<float>* muteParam = nullptr;
+    std::atomic<float>* bypassParam = nullptr;
+    std::atomic<float>* velocityCorrectionParam = nullptr;
+    std::atomic<uint32_t> inputNoteOnCounter { 0 };
+    std::atomic<uint32_t> outputNoteOnCounter { 0 };
+    std::atomic<float> lastTimingDeltaMs { 0.0f };
     std::shared_ptr<ReferenceData> referenceData;
     std::array<ActiveNote, kMaxActiveNotes> activeNotes {};
     int activeNoteCount = 0;

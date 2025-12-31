@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.0.8 (2025-12-31)
+
+- **Summary:** PERSONALITIES (PRISM): Update 7 files
+- **Files:**
+  - `CMakeLists.txt`
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `Source/PluginProcessor.cpp`
+  - `Source/PluginProcessor.h`
+  - `cmake/UpdateBuildInfo.cmake`
+  - `devnotes.json`
+
 ## v0.0.7 (2025-12-30)
 
 - **Summary:** PERSONALITIES (PRISM): Update 2 files
