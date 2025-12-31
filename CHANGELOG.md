@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.0.10 (2025-12-31)
+
+- **Summary:** PERSONALITIES (PRISM): Update Source
+- **Files:**
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `Source/PluginProcessor.cpp`
+  - `Source/PluginProcessor.h`
+
 ## v0.0.9 (2025-12-31)
 
 - **Summary:** PERSONALITIES (PRISM): Update 3 areas (e.g., .githooks)

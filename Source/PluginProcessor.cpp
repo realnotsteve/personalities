@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 namespace
 {
@@ -116,6 +117,61 @@ uint32_t PluginProcessor::getOutputNoteOnCounter() const noexcept
 float PluginProcessor::getLastTimingDeltaMs() const noexcept
 {
     return lastTimingDeltaMs.load (std::memory_order_relaxed);
+}
+
+bool PluginProcessor::computeAutoMatchSettings (float& matchWindowMs, float& slackMs) const
+{
+    auto reference = std::atomic_load (&referenceData);
+    if (reference == nullptr || reference->notes.empty())
+        return false;
+
+    constexpr double kDefaultMatchWindowMs = 60.0;
+    constexpr double kMinAutoMatchWindowMs = 5.0;
+    constexpr double kSlackMultiplier = 3.0;
+
+    std::array<double, 16 * 128> lastOnTimeSeconds;
+    lastOnTimeSeconds.fill (-1.0);
+
+    double minDeltaMs = std::numeric_limits<double>::infinity();
+
+    for (const auto& note : reference->notes)
+    {
+        const int channel = juce::jlimit (1, 16, note.channel);
+        const int noteNumber = juce::jlimit (0, 127, note.noteNumber);
+        const int index = (channel - 1) * 128 + noteNumber;
+        const double timeSeconds = note.onTimeSeconds;
+        const double previousTime = lastOnTimeSeconds[static_cast<size_t> (index)];
+
+        if (previousTime >= 0.0)
+        {
+            const double deltaMs = (timeSeconds - previousTime) * 1000.0;
+            if (deltaMs > 0.0 && deltaMs < minDeltaMs)
+                minDeltaMs = deltaMs;
+        }
+
+        lastOnTimeSeconds[static_cast<size_t> (index)] = timeSeconds;
+    }
+
+    double windowMs = kDefaultMatchWindowMs;
+    if (std::isfinite (minDeltaMs))
+        windowMs = minDeltaMs * 0.4;
+
+    windowMs = juce::jlimit (kMinAutoMatchWindowMs, static_cast<double> (kMaxMatchWindowMs), windowMs);
+    double slack = windowMs * kSlackMultiplier;
+    slack = juce::jlimit (50.0, static_cast<double> (kMaxSlackMs), slack);
+
+    matchWindowMs = static_cast<float> (windowMs);
+    slackMs = static_cast<float> (slack);
+    return true;
+}
+
+void PluginProcessor::applyAutoMatchSettings (float matchWindowMs, float slackMs)
+{
+    if (auto* param = dynamic_cast<juce::RangedAudioParameter*> (apvts.getParameter (kParamMatchWindowMs)))
+        param->setValueNotifyingHost (param->convertTo0to1 (matchWindowMs));
+
+    if (auto* param = dynamic_cast<juce::RangedAudioParameter*> (apvts.getParameter (kParamDelayMs)))
+        param->setValueNotifyingHost (param->convertTo0to1 (slackMs));
 }
 
 void PluginProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)

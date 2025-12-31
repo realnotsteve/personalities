@@ -35,6 +35,7 @@ private:
     juce::Label  slackLabel;
     juce::Slider matchWindowSlider;
     juce::Label  matchWindowLabel;
+    juce::TextButton autoButton;
     juce::Slider correctionSlider;
     juce::Label  correctionLabel;
     juce::Label buildInfoLabel;

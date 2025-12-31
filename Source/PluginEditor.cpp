@@ -134,6 +134,9 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     matchWindowSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 70, 20);
     addAndMakeVisible (matchWindowSlider);
 
+    autoButton.setButtonText ("Auto");
+    addAndMakeVisible (autoButton);
+
     correctionLabel.setText ("Correction", juce::dontSendNotification);
     correctionLabel.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (correctionLabel);
@@ -187,6 +190,27 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         processor.apvts, kParamMute, muteButton);
     bypassAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor.apvts, kParamBypass, bypassButton);
+
+    autoButton.onClick = [this]
+    {
+        float matchWindowMs = 0.0f;
+        float slackMs = 0.0f;
+        if (processor.computeAutoMatchSettings (matchWindowMs, slackMs))
+        {
+            processor.applyAutoMatchSettings (matchWindowMs, slackMs);
+            referenceStatusLabel.setText ("Auto set: Slack "
+                    + juce::String (slackMs, 0)
+                    + " ms, Window "
+                    + juce::String (matchWindowMs, 0)
+                    + " ms",
+                juce::dontSendNotification);
+        }
+        else
+        {
+            referenceStatusLabel.setText ("Auto failed: load a personality.",
+                juce::dontSendNotification);
+        }
+    };
 
     juce::String buildInfoText = "v";
     buildInfoText << PERSONALITIES_VERSION_STRING << " | built " << PERSONALITIES_BUILD_TIMESTAMP;
@@ -246,7 +270,9 @@ void PluginEditor::resized()
 
     controlsArea.removeFromTop (6);
     auto matchArea = controlsArea.removeFromTop (50);
-    matchWindowLabel.setBounds (matchArea.removeFromTop (18));
+    auto matchLabelRow = matchArea.removeFromTop (18);
+    autoButton.setBounds (matchLabelRow.removeFromRight (60));
+    matchWindowLabel.setBounds (matchLabelRow);
     matchWindowSlider.setBounds (matchArea);
 
     auto inputArea = statusArea.removeFromTop (38);

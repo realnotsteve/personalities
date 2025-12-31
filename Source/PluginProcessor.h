@@ -47,6 +47,8 @@ public:
     uint32_t getInputNoteOnCounter() const noexcept;
     uint32_t getOutputNoteOnCounter() const noexcept;
     float getLastTimingDeltaMs() const noexcept;
+    bool computeAutoMatchSettings (float& matchWindowMs, float& slackMs) const;
+    void applyAutoMatchSettings (float matchWindowMs, float slackMs);
 
     // Parameters
     juce::AudioProcessorValueTreeState apvts;
