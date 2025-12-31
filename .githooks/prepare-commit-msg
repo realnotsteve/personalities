@@ -4,7 +4,8 @@ set -euo pipefail
 MSG_FILE="${1:-}"
 COMMIT_SOURCE="${2:-}"
 
-DEFAULT_SUBJECT="${PRISM_COMMIT_MSG:-PERSONALITIES (PRISM): update}"
+DEFAULT_PREFIX="PERSONALITIES (PRISM):"
+DEFAULT_SUBJECT="${PRISM_COMMIT_MSG:-}"
 
 # If message is coming from -m, merge, squash, etc., don't override.
 if [[ -n "${COMMIT_SOURCE}" ]]; then
@@ -18,8 +19,40 @@ if [[ -f "$MSG_FILE" ]]; then
   fi
 fi
 
-# Build a tiny context footer: first 3 staged files
-FILES="$(git diff --cached --name-only | head -n 3 | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+# Use changelog summary as a fallback subject if provided.
+if [[ -z "${DEFAULT_SUBJECT}" && -n "${PRISM_CHANGELOG_SUMMARY:-}" ]]; then
+  DEFAULT_SUBJECT="${PRISM_CHANGELOG_SUMMARY}"
+fi
+
+STAGED_FILES="$(git diff --cached --name-only)"
+FILTERED_FILES="$(printf "%s\n" "${STAGED_FILES}" | grep -vE '^(devnotes\.json|CHANGELOG\.md)$' || true)"
+
+if [[ -z "${FILTERED_FILES}" ]]; then
+  FILTERED_FILES="${STAGED_FILES}"
+fi
+
+if [[ -z "${DEFAULT_SUBJECT}" ]]; then
+  if [[ -z "${FILTERED_FILES}" ]]; then
+    DEFAULT_SUBJECT="${DEFAULT_PREFIX} update"
+  else
+    TOPS="$(printf "%s\n" "${FILTERED_FILES}" | awk -F/ '{print $1}' | sort -u)"
+    TOP_COUNT="$(printf "%s\n" "${TOPS}" | grep -c . || true)"
+    if [[ "${TOP_COUNT}" -eq 1 ]]; then
+      TOP="$(printf "%s\n" "${TOPS}" | head -n 1)"
+      DEFAULT_SUBJECT="${DEFAULT_PREFIX} update ${TOP}"
+    elif [[ "${TOP_COUNT}" -eq 2 ]]; then
+      TOP1="$(printf "%s\n" "${TOPS}" | sed -n '1p')"
+      TOP2="$(printf "%s\n" "${TOPS}" | sed -n '2p')"
+      DEFAULT_SUBJECT="${DEFAULT_PREFIX} update ${TOP1}, ${TOP2}"
+    else
+      TOP1="$(printf "%s\n" "${TOPS}" | head -n 1)"
+      DEFAULT_SUBJECT="${DEFAULT_PREFIX} update ${TOP_COUNT} areas (e.g., ${TOP1})"
+    fi
+  fi
+fi
+
+# Build a tiny context footer: first 3 staged files (excluding auto-updated files).
+FILES="$(printf "%s\n" "${FILTERED_FILES}" | head -n 3 | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
 FOOTER=""
 if [[ -n "$FILES" ]]; then
   FOOTER=$'\n\n'"Files: ${FILES}"

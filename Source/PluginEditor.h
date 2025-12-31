@@ -33,6 +33,8 @@ private:
 
     juce::Slider slackSlider;
     juce::Label  slackLabel;
+    juce::Slider matchWindowSlider;
+    juce::Label  matchWindowLabel;
     juce::Slider correctionSlider;
     juce::Label  correctionLabel;
     juce::Label buildInfoLabel;
@@ -47,6 +49,7 @@ private:
     juce::ToggleButton bypassButton;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> slackAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> matchWindowAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> correctionAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> velocityAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> muteAttachment;

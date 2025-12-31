@@ -70,6 +70,7 @@ private:
     {
         juce::String sourcePath;
         std::vector<ReferenceNote> notes;
+        std::vector<uint8_t> matched;
         double sampleRate = 0.0;
         bool sampleTimesValid = false;
         uint64_t firstNoteSample = 0;
@@ -97,6 +98,12 @@ private:
     static constexpr int kMaxActiveNotes = 2048;
 
     void insertScheduledEvent (const ScheduledMidiEvent& event) noexcept;
+    int matchReferenceNoteForOn (int noteNumber,
+                                 int channel,
+                                 uint64_t userSample,
+                                 uint64_t matchWindowSamples,
+                                 uint64_t referenceStartSample,
+                                 ReferenceData& reference) noexcept;
     void resetPlaybackState() noexcept;
     void updateReferenceSampleTimes (ReferenceData& data, double sampleRate);
 
@@ -105,9 +112,11 @@ private:
     uint64_t timelineSample = 0;
     uint64_t orderCounter = 0;
     uint64_t latchedSlackSamples = 0;
+    uint64_t latchedMatchWindowSamples = 0;
     uint64_t referenceTransportStartSample = 0;
     double sampleRateHz = 44100.0;
     std::atomic<float>* delayMsParam = nullptr;
+    std::atomic<float>* matchWindowMsParam = nullptr;
     std::atomic<float>* correctionParam = nullptr;
     std::atomic<float>* muteParam = nullptr;
     std::atomic<float>* bypassParam = nullptr;

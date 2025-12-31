@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.0.9 (2025-12-31)
+
+- **Summary:** PERSONALITIES (PRISM): Update 3 areas (e.g., .githooks)
+- **Files:**
+  - `.githooks/pre-commit`
+  - `.githooks/prepare-commit-msg`
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `Source/PluginProcessor.cpp`
+  - `Source/PluginProcessor.h`
+  - `devnotes.json`
+
 ## v0.0.8 (2025-12-31)
 
 - **Summary:** PERSONALITIES (PRISM): Update 7 files

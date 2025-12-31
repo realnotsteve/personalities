@@ -1,17 +1,20 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
 namespace
 {
     constexpr const char* kParamDelayMs = "delay_ms";
+    constexpr const char* kParamMatchWindowMs = "match_window_ms";
     constexpr const char* kParamCorrection = "correction";
     constexpr const char* kParamMute = "mute";
     constexpr const char* kParamBypass = "bypass";
     constexpr const char* kParamVelocityCorrection = "velocity_correction";
     constexpr const char* kReferencePathProperty = "reference_path";
     constexpr float kMaxSlackMs = 2000.0f;
+    constexpr float kMaxMatchWindowMs = 200.0f;
 
     uint64_t msToSamples (double sampleRate, float ms) noexcept
     {
@@ -47,6 +50,7 @@ PluginProcessor::PluginProcessor()
   apvts (*this, nullptr, "PARAMS", createParameterLayout())
 {
     delayMsParam = apvts.getRawParameterValue (kParamDelayMs);
+    matchWindowMsParam = apvts.getRawParameterValue (kParamMatchWindowMs);
     correctionParam = apvts.getRawParameterValue (kParamCorrection);
     muteParam = apvts.getRawParameterValue (kParamMute);
     bypassParam = apvts.getRawParameterValue (kParamBypass);
@@ -62,6 +66,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         "Slack (ms)",
         juce::NormalisableRange<float> { 0.0f, kMaxSlackMs, 1.0f },
         50.0f
+    ));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID { kParamMatchWindowMs, 1 },
+        "Match Window (ms)",
+        juce::NormalisableRange<float> { 0.0f, kMaxMatchWindowMs, 1.0f },
+        60.0f
     ));
 
     layout.add (std::make_unique<juce::AudioParameterFloat>(
@@ -125,6 +136,9 @@ void PluginProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
     {
         if (! ref->sampleTimesValid || ref->sampleRate != sampleRateHz)
             updateReferenceSampleTimes (*ref, sampleRateHz);
+
+        if (ref->matched.size() != ref->notes.size())
+            ref->matched.assign (ref->notes.size(), 0);
     }
 }
 
@@ -177,6 +191,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     transportPlaying.store (isPlaying, std::memory_order_relaxed);
 
     const float slackMs = (delayMsParam != nullptr) ? delayMsParam->load() : 0.0f;
+    const float matchWindowMs = (matchWindowMsParam != nullptr) ? matchWindowMsParam->load() : 0.0f;
 
     if (isPlaying)
     {
@@ -184,6 +199,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         {
             resetPlaybackState();
             latchedSlackSamples = msToSamples (sampleRateHz, slackMs);
+            latchedMatchWindowSamples = msToSamples (sampleRateHz, matchWindowMs);
             timelineSample = (hostSample >= 0) ? static_cast<uint64_t> (hostSample) : 0;
             referenceTransportStartSample = timelineSample;
         }
@@ -209,6 +225,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     correction = juce::jlimit (0.0f, 1.0f, correction);
 
     const uint64_t slackSamples = isPlaying ? latchedSlackSamples : msToSamples (sampleRateHz, slackMs);
+    const uint64_t matchWindowSamples = isPlaying ? latchedMatchWindowSamples : msToSamples (sampleRateHz, matchWindowMs);
     auto reference = std::atomic_load (&referenceData);
     const bool hasReference = isPlaying
         && reference != nullptr
@@ -226,6 +243,10 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
             if (metadata.numBytes < 3)
                 continue;
 
+            const int sampleOffset = metadata.samplePosition;
+            const int clampedOffset = juce::jmax (0, sampleOffset);
+            const uint64_t userSample = blockStart + static_cast<uint64_t> (clampedOffset);
+
             const uint8_t* data = metadata.data;
             const uint8_t status = static_cast<uint8_t> (data[0] & 0xF0);
 
@@ -236,11 +257,16 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 if (! isMuted)
                     outputNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
 
-                if (hasReference && referenceCursor < static_cast<int> (reference->notes.size()))
+                if (hasReference)
                 {
-                    const int refIndex = referenceCursor++;
                     const int channel = (data[0] & 0x0F) + 1;
-                    if (activeNoteCount < kMaxActiveNotes)
+                    const int refIndex = matchReferenceNoteForOn (static_cast<int> (data[1]),
+                        channel,
+                        userSample,
+                        matchWindowSamples,
+                        referenceStartSample,
+                        *reference);
+                    if (refIndex >= 0 && activeNoteCount < kMaxActiveNotes)
                         activeNotes[activeNoteCount++] = { static_cast<int> (data[1]), channel, refIndex };
                 }
             }
@@ -330,10 +356,16 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 int refIndex = -1;
                 const ReferenceNote* refNote = nullptr;
 
-                if (hasReference && referenceCursor < static_cast<int> (reference->notes.size()))
+                if (hasReference)
                 {
-                    refIndex = referenceCursor++;
-                    refNote = &reference->notes[refIndex];
+                    refIndex = matchReferenceNoteForOn (static_cast<int> (data[1]),
+                        channel,
+                        userSample,
+                        matchWindowSamples,
+                        referenceStartSample,
+                        *reference);
+                    if (refIndex >= 0 && refIndex < static_cast<int> (reference->notes.size()))
+                        refNote = &reference->notes[refIndex];
                 }
 
                 const uint64_t alignedRefSample = (refNote != nullptr && refNote->onSample >= referenceStartSample)
@@ -565,6 +597,7 @@ bool PluginProcessor::loadReferenceFromFile (const juce::File& file, juce::Strin
     if (sampleRateHz > 0.0)
         updateReferenceSampleTimes (*newReference, sampleRateHz);
 
+    newReference->matched.assign (newReference->notes.size(), 0);
     std::atomic_store (&referenceData, newReference);
     referencePath = newReference->sourcePath;
     apvts.state.setProperty (kReferencePathProperty, referencePath, nullptr);
@@ -582,12 +615,97 @@ juce::AudioProcessorEditor* PluginProcessor::createEditor()
     return new PluginEditor (*this);
 }
 
+int PluginProcessor::matchReferenceNoteForOn (int noteNumber,
+                                              int channel,
+                                              uint64_t userSample,
+                                              uint64_t matchWindowSamples,
+                                              uint64_t referenceStartSample,
+                                              ReferenceData& reference) noexcept
+{
+    const int totalNotes = static_cast<int> (reference.notes.size());
+    if (referenceCursor >= totalNotes)
+        return -1;
+
+    if (reference.matched.size() != reference.notes.size())
+    {
+        const int fallbackIndex = referenceCursor;
+        referenceCursor = juce::jmin (referenceCursor + 1, totalNotes);
+        return fallbackIndex;
+    }
+
+    int selectedIndex = -1;
+
+    if (matchWindowSamples == 0)
+    {
+        selectedIndex = referenceCursor;
+    }
+    else
+    {
+        const uint64_t windowStart = (userSample > matchWindowSamples)
+            ? userSample - matchWindowSamples
+            : 0;
+        const uint64_t windowEnd = userSample + matchWindowSamples;
+
+        int bestIndex = -1;
+        uint64_t bestDistance = 0;
+
+        for (int i = referenceCursor; i < totalNotes; ++i)
+        {
+            if (reference.matched[static_cast<size_t> (i)] != 0)
+                continue;
+
+            const auto& refNote = reference.notes[static_cast<size_t> (i)];
+            const uint64_t alignedRefSample = (refNote.onSample >= referenceStartSample)
+                ? referenceTransportStartSample + (refNote.onSample - referenceStartSample)
+                : referenceTransportStartSample;
+
+            if (alignedRefSample > windowEnd)
+                break;
+            if (alignedRefSample < windowStart)
+                continue;
+            if (refNote.noteNumber != noteNumber || refNote.channel != channel)
+                continue;
+
+            const uint64_t distance = (alignedRefSample >= userSample)
+                ? (alignedRefSample - userSample)
+                : (userSample - alignedRefSample);
+
+            if (bestIndex < 0 || distance < bestDistance)
+            {
+                bestIndex = i;
+                bestDistance = distance;
+            }
+        }
+
+        selectedIndex = (bestIndex >= 0) ? bestIndex : referenceCursor;
+    }
+
+    if (selectedIndex < 0 || selectedIndex >= totalNotes)
+        return -1;
+
+    reference.matched[static_cast<size_t> (selectedIndex)] = 1;
+
+    while (referenceCursor < totalNotes
+        && reference.matched[static_cast<size_t> (referenceCursor)] != 0)
+    {
+        ++referenceCursor;
+    }
+
+    return selectedIndex;
+}
+
 void PluginProcessor::resetPlaybackState() noexcept
 {
     queueSize = 0;
     orderCounter = 0;
     activeNoteCount = 0;
     referenceCursor = 0;
+
+    if (auto ref = std::atomic_load (&referenceData))
+    {
+        if (ref->matched.size() == ref->notes.size())
+            std::fill (ref->matched.begin(), ref->matched.end(), 0);
+    }
 }
 
 void PluginProcessor::insertScheduledEvent (const ScheduledMidiEvent& event) noexcept

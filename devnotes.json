@@ -4,7 +4,7 @@
     "alias": "Personalities",
     "author": "William Evans, PhD",
     "description": "JUCE/C++ plugin for Studio One (macOS). Loads a reference MIDI performance, then interpolates user note timing/velocity toward the reference using a fixed Slack buffer and a Correction control.",
-    "version": "0.0.8",
+    "version": "0.0.9",
     "repo_folder": "personalities",
     "slug": "personalities",
     "host_target": "Studio One (macOS)",
@@ -59,11 +59,11 @@
     },
     "prepare_commit_msg": {
       "hook_path": ".githooks/prepare-commit-msg",
-      "behavior": "If the commit message is empty, auto-fill a default subject and append a Files footer with up to 3 staged paths. Override with PRISM_COMMIT_MSG env var or by typing your own message. Default subject uses prefix \"PERSONALITIES (PRISM):\".",
+      "behavior": "If the commit message is empty, auto-fill a subject based on staged file areas (excluding devnotes.json and CHANGELOG.md) and append a Files footer with up to 3 staged paths. Override with PRISM_COMMIT_MSG or PRISM_CHANGELOG_SUMMARY env vars, or by typing your own message. Default subject uses prefix \"PERSONALITIES (PRISM):\".",
       "env_overrides": {
         "PRISM_COMMIT_MSG": "Override default commit subject"
       },
-      "default_message": "PERSONALITIES (PRISM): update"
+      "default_message": "PERSONALITIES (PRISM): update <area>"
     },
     "after_push": {
       "description": "After the user confirms a push, review the changelog entry and staged files to verify what changed."

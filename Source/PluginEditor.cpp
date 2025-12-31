@@ -5,6 +5,7 @@
 namespace
 {
     constexpr const char* kParamDelayMs = "delay_ms";
+    constexpr const char* kParamMatchWindowMs = "match_window_ms";
     constexpr const char* kParamCorrection = "correction";
     constexpr const char* kParamMute = "mute";
     constexpr const char* kParamBypass = "bypass";
@@ -125,6 +126,14 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     slackSlider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 20);
     addAndMakeVisible (slackSlider);
 
+    matchWindowLabel.setText ("Match Window (ms)", juce::dontSendNotification);
+    matchWindowLabel.setJustificationType (juce::Justification::centred);
+    addAndMakeVisible (matchWindowLabel);
+
+    matchWindowSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    matchWindowSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 70, 20);
+    addAndMakeVisible (matchWindowSlider);
+
     correctionLabel.setText ("Correction", juce::dontSendNotification);
     correctionLabel.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (correctionLabel);
@@ -168,6 +177,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     slackAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         processor.apvts, kParamDelayMs, slackSlider);
+    matchWindowAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        processor.apvts, kParamMatchWindowMs, matchWindowSlider);
     correctionAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         processor.apvts, kParamCorrection, correctionSlider);
     velocityAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -195,7 +206,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         juce::dontSendNotification);
     startTimerHz (30);
 
-    setSize (520, 280);
+    setSize (520, 320);
 }
 
 void PluginEditor::paint (juce::Graphics& g)
@@ -221,16 +232,23 @@ void PluginEditor::resized()
 
     r.removeFromTop (10);
 
-    auto knobRow = r;
+    auto controlsArea = r.removeFromLeft (360);
+    auto statusArea = r.reduced (10, 0);
+
+    auto knobRow = controlsArea.removeFromTop (150);
     auto slackArea = knobRow.removeFromLeft (180);
     slackLabel.setBounds (slackArea.removeFromTop (20));
     slackSlider.setBounds (slackArea.reduced (10));
 
-    auto correctionArea = knobRow.removeFromLeft (180);
+    auto correctionArea = knobRow;
     correctionLabel.setBounds (correctionArea.removeFromTop (20));
     correctionSlider.setBounds (correctionArea.reduced (10));
 
-    auto statusArea = knobRow.reduced (10, 0);
+    controlsArea.removeFromTop (6);
+    auto matchArea = controlsArea.removeFromTop (50);
+    matchWindowLabel.setBounds (matchArea.removeFromTop (18));
+    matchWindowSlider.setBounds (matchArea);
+
     auto inputArea = statusArea.removeFromTop (38);
     inputLabel.setBounds (inputArea.removeFromTop (18));
     inputIndicator.setBounds (inputArea.removeFromTop (20).withSizeKeepingCentre (18, 18));
