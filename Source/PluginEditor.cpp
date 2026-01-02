@@ -193,6 +193,18 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     cpuValueLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (cpuValueLabel);
 
+    bpmLabel.setText ("BPM (Host/Ref)", juce::dontSendNotification);
+    bpmLabel.setJustificationType (juce::Justification::centredLeft);
+    addAndMakeVisible (bpmLabel);
+
+    bpmValueLabel.setText ("-- / --", juce::dontSendNotification);
+    bpmValueLabel.setJustificationType (juce::Justification::centredLeft);
+    bpmValueLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (bpmValueLabel);
+
+    copyLogButton.setButtonText ("Copy Miss Log");
+    addAndMakeVisible (copyLogButton);
+
     velocityButton.setButtonText ("Vel Corr");
     velocityButton.setClickingTogglesState (true);
     addAndMakeVisible (velocityButton);
@@ -239,6 +251,21 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         }
     };
 
+    copyLogButton.onClick = [this]
+    {
+        if (processor.isTransportPlaying())
+        {
+            referenceStatusLabel.setText ("Stop transport to copy miss log.",
+                juce::dontSendNotification);
+            return;
+        }
+
+        const auto report = processor.createMissLogReport();
+        juce::SystemClipboard::copyTextToClipboard (report);
+        referenceStatusLabel.setText ("Miss log copied to clipboard.",
+            juce::dontSendNotification);
+    };
+
     juce::String buildInfoText = "v";
     buildInfoText << PERSONALITIES_VERSION_STRING << " | built " << PERSONALITIES_BUILD_TIMESTAMP;
     buildInfoLabel.setText (buildInfoText, juce::dontSendNotification);
@@ -276,9 +303,20 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     lastCpuPercent = processor.getCpuLoadPercent();
     cpuValueLabel.setText (juce::String (lastCpuPercent, 1) + "%", juce::dontSendNotification);
 
+    lastHostBpm = processor.getHostBpm();
+    lastReferenceBpm = processor.getReferenceBpm();
+    auto formatBpm = [] (float bpm)
+    {
+        return (bpm > 0.0f) ? juce::String (bpm, 2) : juce::String ("--");
+    };
+    bpmValueLabel.setText (formatBpm (lastHostBpm) + " / " + formatBpm (lastReferenceBpm),
+        juce::dontSendNotification);
+
+    copyLogButton.setEnabled (! lastTransportPlaying);
+
     startTimerHz (30);
 
-    setSize (670, 380);
+    setSize (670, 420);
 }
 
 void PluginEditor::paint (juce::Graphics& g)
@@ -347,7 +385,14 @@ void PluginEditor::resized()
     cpuLabel.setBounds (cpuRow.removeFromLeft (90));
     cpuValueLabel.setBounds (cpuRow);
 
-    statusArea.removeFromTop (6);
+    auto bpmRow = statusArea.removeFromTop (24);
+    bpmLabel.setBounds (bpmRow.removeFromLeft (90));
+    bpmValueLabel.setBounds (bpmRow);
+
+    auto copyRow = statusArea.removeFromTop (26);
+    copyLogButton.setBounds (copyRow);
+
+    statusArea.removeFromTop (4);
     velocityButton.setBounds (statusArea.removeFromTop (24));
     muteButton.setBounds (statusArea.removeFromTop (24));
     bypassButton.setBounds (statusArea.removeFromTop (24));
@@ -397,6 +442,7 @@ void PluginEditor::timerCallback()
         transportValueLabel.setText (isPlaying ? "Playing" : "Stopped", juce::dontSendNotification);
         transportValueLabel.setColour (juce::Label::textColourId,
             isPlaying ? juce::Colours::lightgreen : juce::Colours::lightgrey);
+        copyLogButton.setEnabled (! isPlaying);
     }
 
     const auto matched = processor.getMatchedNoteOnCounter();
@@ -419,5 +465,19 @@ void PluginEditor::timerCallback()
     {
         lastCpuPercent = cpuPercent;
         cpuValueLabel.setText (juce::String (cpuPercent, 1) + "%", juce::dontSendNotification);
+    }
+
+    const float hostBpm = processor.getHostBpm();
+    const float refBpm = processor.getReferenceBpm();
+    if (std::abs (hostBpm - lastHostBpm) > 0.05f || std::abs (refBpm - lastReferenceBpm) > 0.05f)
+    {
+        lastHostBpm = hostBpm;
+        lastReferenceBpm = refBpm;
+        auto formatBpm = [] (float bpm)
+        {
+            return (bpm > 0.0f) ? juce::String (bpm, 2) : juce::String ("--");
+        };
+        bpmValueLabel.setText (formatBpm (hostBpm) + " / " + formatBpm (refBpm),
+            juce::dontSendNotification);
     }
 }

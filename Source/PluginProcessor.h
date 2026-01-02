@@ -51,6 +51,9 @@ public:
     uint32_t getMissedNoteOnCounter() const noexcept;
     bool isTransportPlaying() const noexcept;
     float getCpuLoadPercent() const noexcept;
+    float getHostBpm() const noexcept;
+    float getReferenceBpm() const noexcept;
+    juce::String createMissLogReport() const;
     bool computeAutoMatchSettings (float& matchWindowMs, float& slackMs) const;
     void applyAutoMatchSettings (float matchWindowMs, float slackMs);
 
@@ -72,14 +75,22 @@ private:
         uint64_t offSample = 0;
     };
 
+    struct ReferenceTempoEvent
+    {
+        double timeSeconds = 0.0;
+        double bpm = 120.0;
+    };
+
     struct ReferenceData
     {
         juce::String sourcePath;
         std::vector<ReferenceNote> notes;
         std::vector<uint8_t> matched;
+        std::vector<ReferenceTempoEvent> tempoEvents;
         double sampleRate = 0.0;
         bool sampleTimesValid = false;
         uint64_t firstNoteSample = 0;
+        double firstNoteTimeSeconds = 0.0;
     };
 
     struct ActiveNote
@@ -97,11 +108,27 @@ private:
         uint8_t data[8] = {};
     };
 
+    struct MissLogEntry
+    {
+        float timeMs = 0.0f;
+        float slackMs = 0.0f;
+        float matchWindowMs = 0.0f;
+        float correction = 0.0f;
+        float hostBpm = -1.0f;
+        float referenceBpm = -1.0f;
+        uint8_t noteNumber = 0;
+        uint8_t velocity = 0;
+        uint8_t channel = 1;
+        uint8_t reserved = 0;
+        int referenceCursor = 0;
+    };
+
     static constexpr int kMaxQueuedEvents = 4096;
     static constexpr int kMaxMidiBytes = 8;
     static constexpr int kMidiEventOverheadBytes = sizeof (std::int32_t) + sizeof (std::uint16_t);
     static constexpr int kMaxOutputEvents = kMaxQueuedEvents;
     static constexpr int kMaxActiveNotes = 2048;
+    static constexpr uint32_t kMaxMissLogEntries = 4096;
 
     void insertScheduledEvent (const ScheduledMidiEvent& event) noexcept;
     int matchReferenceNoteForOn (int noteNumber,
@@ -112,6 +139,16 @@ private:
                                  ReferenceData& reference) noexcept;
     void resetPlaybackState() noexcept;
     void updateReferenceSampleTimes (ReferenceData& data, double sampleRate);
+    void clearMissLog() noexcept;
+    void logMiss (int noteNumber,
+                  int velocity,
+                  int channel,
+                  uint64_t userSample,
+                  float slackMs,
+                  float matchWindowMs,
+                  float correction,
+                  float hostBpmValue,
+                  float referenceBpmValue) noexcept;
 
     std::array<ScheduledMidiEvent, kMaxQueuedEvents> queue {};
     int queueSize = 0;
@@ -133,15 +170,21 @@ private:
     std::atomic<uint32_t> matchedNoteOnCounter { 0 };
     std::atomic<uint32_t> missedNoteOnCounter { 0 };
     std::atomic<float> cpuLoadPercent { 0.0f };
+    std::atomic<float> hostBpm { -1.0f };
+    std::atomic<float> referenceBpm { -1.0f };
     std::shared_ptr<ReferenceData> referenceData;
     std::array<ActiveNote, kMaxActiveNotes> activeNotes {};
     int activeNoteCount = 0;
     int referenceCursor = 0;
+    int referenceTempoIndex = 0;
     int64_t lastHostSample = -1;
     bool transportWasPlaying = false;
     std::atomic<bool> transportPlaying { false };
     juce::String referencePath;
     juce::MidiBuffer outputBuffer;
+    std::array<MissLogEntry, kMaxMissLogEntries> missLog {};
+    std::atomic<uint32_t> missLogCount { 0 };
+    std::atomic<bool> missLogOverflow { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginProcessor)
 };

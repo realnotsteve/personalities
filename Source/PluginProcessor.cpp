@@ -139,6 +139,48 @@ float PluginProcessor::getCpuLoadPercent() const noexcept
     return cpuLoadPercent.load (std::memory_order_relaxed);
 }
 
+float PluginProcessor::getHostBpm() const noexcept
+{
+    return hostBpm.load (std::memory_order_relaxed);
+}
+
+float PluginProcessor::getReferenceBpm() const noexcept
+{
+    return referenceBpm.load (std::memory_order_relaxed);
+}
+
+juce::String PluginProcessor::createMissLogReport() const
+{
+    juce::String report;
+    report << "Personalities Miss Log\n";
+    report << "Reference: " << (referencePath.isNotEmpty() ? referencePath : "None") << "\n";
+
+    const auto count = missLogCount.load (std::memory_order_acquire);
+    const bool overflow = missLogOverflow.load (std::memory_order_relaxed);
+    report << "Entries: " << static_cast<int> (count);
+    if (overflow)
+        report << " (overflow)";
+    report << "\n";
+    report << "Columns: time_ms,note,vel,channel,slack_ms,window_ms,correction,host_bpm,reference_bpm,ref_cursor\n";
+
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        const auto& entry = missLog[i];
+        report << juce::String (entry.timeMs, 2) << ","
+               << static_cast<int> (entry.noteNumber) << ","
+               << static_cast<int> (entry.velocity) << ","
+               << static_cast<int> (entry.channel) << ","
+               << juce::String (entry.slackMs, 1) << ","
+               << juce::String (entry.matchWindowMs, 1) << ","
+               << juce::String (entry.correction, 3) << ","
+               << juce::String (entry.hostBpm, 2) << ","
+               << juce::String (entry.referenceBpm, 2) << ","
+               << entry.referenceCursor << "\n";
+    }
+
+    return report;
+}
+
 bool PluginProcessor::computeAutoMatchSettings (float& matchWindowMs, float& slackMs) const
 {
     auto reference = std::atomic_load (&referenceData);
@@ -205,6 +247,9 @@ void PluginProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
     transportWasPlaying = false;
     resetPlaybackState();
     cpuLoadPercent.store (0.0f, std::memory_order_relaxed);
+    hostBpm.store (-1.0f, std::memory_order_relaxed);
+    referenceBpm.store (-1.0f, std::memory_order_relaxed);
+    clearMissLog();
 
     outputBuffer.clear();
     outputBuffer.ensureSize (kMaxOutputEvents * (kMaxMidiBytes + kMidiEventOverheadBytes));
@@ -272,6 +317,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     };
     bool isPlaying = false;
     int64_t hostSample = -1;
+    float hostBpmValue = -1.0f;
 
     if (auto* playhead = getPlayHead())
     {
@@ -281,10 +327,14 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 
             if (auto timeInSamples = position->getTimeInSamples())
                 hostSample = *timeInSamples;
+
+            if (auto bpm = position->getBpm())
+                hostBpmValue = static_cast<float> (*bpm);
         }
     }
 
     transportPlaying.store (isPlaying, std::memory_order_relaxed);
+    hostBpm.store (hostBpmValue, std::memory_order_relaxed);
 
     const float slackMs = (delayMsParam != nullptr) ? delayMsParam->load() : 0.0f;
     const float matchWindowMs = (matchWindowMsParam != nullptr) ? matchWindowMsParam->load() : 0.0f;
@@ -294,6 +344,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         if (! transportWasPlaying)
         {
             resetPlaybackState();
+            clearMissLog();
             latchedSlackSamples = msToSamples (sampleRateHz, slackMs);
             latchedMatchWindowSamples = msToSamples (sampleRateHz, matchWindowMs);
             timelineSample = (hostSample >= 0) ? static_cast<uint64_t> (hostSample) : 0;
@@ -302,6 +353,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         else if (hostSample >= 0 && lastHostSample >= 0 && hostSample < lastHostSample)
         {
             resetPlaybackState();
+            clearMissLog();
             timelineSample = static_cast<uint64_t> (hostSample);
             referenceTransportStartSample = timelineSample;
         }
@@ -331,6 +383,38 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     const uint64_t referenceStartSample = hasReference ? reference->firstNoteSample : 0;
     const bool velocityCorrectionEnabled = (velocityCorrectionParam == nullptr)
         || (velocityCorrectionParam->load() >= 0.5f);
+
+    float referenceBpmValue = -1.0f;
+    if (hasReference && sampleRateHz > 0.0 && ! reference->tempoEvents.empty())
+    {
+        const double elapsedSeconds = (blockStart >= referenceTransportStartSample)
+            ? static_cast<double> (blockStart - referenceTransportStartSample) / sampleRateHz
+            : 0.0;
+        const double referenceTimeSeconds = reference->firstNoteTimeSeconds + elapsedSeconds;
+        const auto& tempoEvents = reference->tempoEvents;
+        const int numTempoEvents = static_cast<int> (tempoEvents.size());
+
+        if (referenceTempoIndex >= numTempoEvents)
+            referenceTempoIndex = numTempoEvents - 1;
+        if (referenceTempoIndex < 0)
+            referenceTempoIndex = 0;
+
+        while (referenceTempoIndex + 1 < numTempoEvents
+            && referenceTimeSeconds >= tempoEvents[static_cast<size_t> (referenceTempoIndex + 1)].timeSeconds)
+        {
+            ++referenceTempoIndex;
+        }
+
+        while (referenceTempoIndex > 0
+            && referenceTimeSeconds < tempoEvents[static_cast<size_t> (referenceTempoIndex)].timeSeconds)
+        {
+            --referenceTempoIndex;
+        }
+
+        referenceBpmValue = static_cast<float> (tempoEvents[static_cast<size_t> (referenceTempoIndex)].bpm);
+    }
+
+    referenceBpm.store (referenceBpmValue, std::memory_order_relaxed);
 
     if (isBypassed)
     {
@@ -371,6 +455,15 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     else
                     {
                         missedNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
+                        logMiss (static_cast<int> (data[1]),
+                            static_cast<int> (data[2]),
+                            channel,
+                            userSample,
+                            slackMs,
+                            matchWindowMs,
+                            correction,
+                            hostBpmValue,
+                            referenceBpmValue);
                     }
                 }
             }
@@ -474,7 +567,18 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     if (refIndex >= 0)
                         matchedNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
                     else
+                    {
                         missedNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
+                        logMiss (static_cast<int> (data[1]),
+                            static_cast<int> (data[2]),
+                            channel,
+                            userSample,
+                            slackMs,
+                            matchWindowMs,
+                            correction,
+                            hostBpmValue,
+                            referenceBpmValue);
+                    }
                 }
 
                 const uint64_t alignedRefSample = (refNote != nullptr && refNote->onSample >= referenceStartSample)
@@ -658,6 +762,31 @@ bool PluginProcessor::loadReferenceFromFile (const juce::File& file, juce::Strin
 
     midiFile.convertTimestampTicksToSeconds();
 
+    std::vector<ReferenceTempoEvent> tempoEvents;
+    tempoEvents.reserve (32);
+
+    for (int i = 0; i < midiFile.getNumTracks(); ++i)
+    {
+        const auto* track = midiFile.getTrack (i);
+        if (track == nullptr)
+            continue;
+
+        for (int eventIndex = 0; eventIndex < track->getNumEvents(); ++eventIndex)
+        {
+            const auto* event = track->getEventPointer (eventIndex);
+            if (event == nullptr)
+                continue;
+
+            const auto& message = event->message;
+            if (! message.isTempoMetaEvent())
+                continue;
+
+            const double secondsPerQuarter = message.getTempoSecondsPerQuarterNote();
+            const double bpm = secondsPerQuarter > 0.0 ? (60.0 / secondsPerQuarter) : 120.0;
+            tempoEvents.push_back ({ message.getTimeStamp(), bpm });
+        }
+    }
+
     juce::MidiMessageSequence combined;
     for (int i = 0; i < midiFile.getNumTracks(); ++i)
         combined.addSequence (*midiFile.getTrack (i), 0.0);
@@ -704,6 +833,28 @@ bool PluginProcessor::loadReferenceFromFile (const juce::File& file, juce::Strin
         return false;
     }
 
+    if (tempoEvents.empty())
+        tempoEvents.push_back ({ 0.0, 120.0 });
+
+    std::sort (tempoEvents.begin(), tempoEvents.end(),
+        [] (const ReferenceTempoEvent& a, const ReferenceTempoEvent& b)
+        {
+            return a.timeSeconds < b.timeSeconds;
+        });
+
+    std::vector<ReferenceTempoEvent> collapsedTempo;
+    collapsedTempo.reserve (tempoEvents.size());
+    for (const auto& event : tempoEvents)
+    {
+        if (collapsedTempo.empty() || event.timeSeconds > collapsedTempo.back().timeSeconds + 1.0e-9)
+            collapsedTempo.push_back (event);
+        else
+            collapsedTempo.back() = event;
+    }
+
+    newReference->tempoEvents = std::move (collapsedTempo);
+    newReference->firstNoteTimeSeconds = newReference->notes.front().onTimeSeconds;
+
     if (sampleRateHz > 0.0)
         updateReferenceSampleTimes (*newReference, sampleRateHz);
 
@@ -711,6 +862,7 @@ bool PluginProcessor::loadReferenceFromFile (const juce::File& file, juce::Strin
     std::atomic_store (&referenceData, newReference);
     referencePath = newReference->sourcePath;
     apvts.state.setProperty (kReferencePathProperty, referencePath, nullptr);
+    referenceTempoIndex = 0;
 
     return true;
 }
@@ -816,6 +968,7 @@ void PluginProcessor::resetPlaybackState() noexcept
     orderCounter = 0;
     activeNoteCount = 0;
     referenceCursor = 0;
+    referenceTempoIndex = 0;
     matchedNoteOnCounter.store (0, std::memory_order_relaxed);
     missedNoteOnCounter.store (0, std::memory_order_relaxed);
 
@@ -824,6 +977,54 @@ void PluginProcessor::resetPlaybackState() noexcept
         if (ref->matched.size() == ref->notes.size())
             std::fill (ref->matched.begin(), ref->matched.end(), 0);
     }
+}
+
+void PluginProcessor::clearMissLog() noexcept
+{
+    missLogCount.store (0, std::memory_order_release);
+    missLogOverflow.store (false, std::memory_order_relaxed);
+}
+
+void PluginProcessor::logMiss (int noteNumber,
+                               int velocity,
+                               int channel,
+                               uint64_t userSample,
+                               float slackMs,
+                               float matchWindowMs,
+                               float correction,
+                               float hostBpmValue,
+                               float referenceBpmValue) noexcept
+{
+    if (! transportPlaying.load (std::memory_order_relaxed))
+        return;
+
+    const uint32_t index = missLogCount.load (std::memory_order_relaxed);
+    if (index >= kMaxMissLogEntries)
+    {
+        missLogOverflow.store (true, std::memory_order_relaxed);
+        return;
+    }
+
+    MissLogEntry entry;
+    entry.timeMs = 0.0f;
+    if (sampleRateHz > 0.0 && userSample >= referenceTransportStartSample)
+    {
+        const double elapsedSeconds = static_cast<double> (userSample - referenceTransportStartSample) / sampleRateHz;
+        entry.timeMs = static_cast<float> (elapsedSeconds * 1000.0);
+    }
+
+    entry.noteNumber = static_cast<uint8_t> (juce::jlimit (0, 127, noteNumber));
+    entry.velocity = static_cast<uint8_t> (juce::jlimit (0, 127, velocity));
+    entry.channel = static_cast<uint8_t> (juce::jlimit (1, 16, channel));
+    entry.slackMs = slackMs;
+    entry.matchWindowMs = matchWindowMs;
+    entry.correction = correction;
+    entry.hostBpm = hostBpmValue;
+    entry.referenceBpm = referenceBpmValue;
+    entry.referenceCursor = referenceCursor;
+
+    missLog[index] = entry;
+    missLogCount.store (index + 1, std::memory_order_release);
 }
 
 void PluginProcessor::insertScheduledEvent (const ScheduledMidiEvent& event) noexcept

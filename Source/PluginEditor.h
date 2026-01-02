@@ -51,6 +51,9 @@ private:
     juce::Label matchValueLabel;
     juce::Label cpuLabel;
     juce::Label cpuValueLabel;
+    juce::Label bpmLabel;
+    juce::Label bpmValueLabel;
+    juce::TextButton copyLogButton;
     juce::ToggleButton velocityButton;
     juce::ToggleButton muteButton;
     juce::ToggleButton bypassButton;
@@ -71,6 +74,8 @@ private:
     uint32_t lastMissedNoteOnCounter = 0;
     bool lastTransportPlaying = false;
     float lastCpuPercent = 0.0f;
+    float lastHostBpm = -1.0f;
+    float lastReferenceBpm = -1.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 };
