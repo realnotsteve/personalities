@@ -17,10 +17,26 @@ private:
     public:
         void paint (juce::Graphics&) override;
         void setActive (bool shouldBeActive);
+        void setColours (juce::Colour active, juce::Colour inactive);
         bool isActive() const noexcept { return active; }
 
     private:
         bool active = false;
+        juce::Colour activeColour = juce::Colours::white;
+        juce::Colour inactiveColour = juce::Colours::darkgrey;
+    };
+
+    class CorrectionDisplay final : public juce::Component
+    {
+    public:
+        void paint (juce::Graphics&) override;
+        void setValues (float noteOnDeltaMs, float noteOffDeltaMs, float velocityDelta, float slackMs);
+
+    private:
+        float smoothedOn = 0.0f;
+        float smoothedOff = 0.0f;
+        float smoothedVel = 0.0f;
+        float smoothedMagnitude = 0.0f;
     };
 
     void timerCallback() override;
@@ -30,6 +46,15 @@ private:
     juce::ComboBox referenceBox;
     juce::Label referenceLabel;
     juce::Label referenceStatusLabel;
+    PulseIndicator referenceLoadedIndicator;
+
+    juce::TextButton virtuosoTabButton;
+    juce::TextButton influencerTabButton;
+    juce::TextButton actualiserTabButton;
+    juce::GroupComponent tabContainer;
+    juce::GroupComponent developerBox;
+    juce::ToggleButton developerToggle;
+    CorrectionDisplay correctionDisplay;
 
     juce::Slider slackSlider;
     juce::Label  slackLabel;

@@ -47,6 +47,8 @@ public:
     uint32_t getInputNoteOnCounter() const noexcept;
     uint32_t getOutputNoteOnCounter() const noexcept;
     float getLastTimingDeltaMs() const noexcept;
+    float getLastNoteOffDeltaMs() const noexcept;
+    float getLastVelocityDelta() const noexcept;
     uint32_t getMatchedNoteOnCounter() const noexcept;
     uint32_t getMissedNoteOnCounter() const noexcept;
     bool isTransportPlaying() const noexcept;
@@ -202,6 +204,8 @@ private:
     std::atomic<uint32_t> inputNoteOnCounter { 0 };
     std::atomic<uint32_t> outputNoteOnCounter { 0 };
     std::atomic<float> lastTimingDeltaMs { 0.0f };
+    std::atomic<float> lastNoteOffDeltaMs { 0.0f };
+    std::atomic<float> lastVelocityDelta { 0.0f };
     std::atomic<uint32_t> matchedNoteOnCounter { 0 };
     std::atomic<uint32_t> missedNoteOnCounter { 0 };
     std::atomic<float> cpuLoadPercent { 0.0f };

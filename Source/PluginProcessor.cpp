@@ -172,6 +172,16 @@ float PluginProcessor::getLastTimingDeltaMs() const noexcept
     return lastTimingDeltaMs.load (std::memory_order_relaxed);
 }
 
+float PluginProcessor::getLastNoteOffDeltaMs() const noexcept
+{
+    return lastNoteOffDeltaMs.load (std::memory_order_relaxed);
+}
+
+float PluginProcessor::getLastVelocityDelta() const noexcept
+{
+    return lastVelocityDelta.load (std::memory_order_relaxed);
+}
+
 uint32_t PluginProcessor::getMatchedNoteOnCounter() const noexcept
 {
     return matchedNoteOnCounter.load (std::memory_order_relaxed);
@@ -613,6 +623,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 captureStartOffsetIfNeeded (userSample);
                 inputNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
                 lastTimingDeltaMs.store (0.0f, std::memory_order_relaxed);
+                lastVelocityDelta.store (0.0f, std::memory_order_relaxed);
                 if (! isMuted)
                     outputNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
 
@@ -654,6 +665,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
             }
             else if (status == 0x80 || (status == 0x90 && data[2] == 0))
             {
+                lastNoteOffDeltaMs.store (0.0f, std::memory_order_relaxed);
                 if (hasReference)
                 {
                     const int channel = (data[0] & 0x0F) + 1;
@@ -784,6 +796,8 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     outVelocity = lerpVelocity (inputVelocity, targetVelocity, effectiveCorrection);
                 }
                 updateVelocityStats (inputVelocity, (refNote != nullptr) ? refNote->onVelocity : -1);
+                lastVelocityDelta.store (static_cast<float> (static_cast<int> (outVelocity)
+                    - static_cast<int> (inputVelocity)), std::memory_order_relaxed);
 
                 const int64_t deltaSamples = static_cast<int64_t> (correctedSample)
                     - static_cast<int64_t> (userSample);
@@ -822,6 +836,12 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                         : inputVelocity;
                     outVelocity = lerpVelocity (inputVelocity, targetVelocity, effectiveCorrection);
                 }
+                const int64_t deltaSamples = static_cast<int64_t> (correctedSample)
+                    - static_cast<int64_t> (userSample);
+                const float deltaMs = sampleRateHz > 0.0
+                    ? static_cast<float> (1000.0 * (static_cast<double> (deltaSamples) / sampleRateHz))
+                    : 0.0f;
+                lastNoteOffDeltaMs.store (deltaMs, std::memory_order_relaxed);
 
                 uint8_t outData[3] = { static_cast<uint8_t> (0x80 | (channel - 1)),
                                        data[1],
@@ -1369,6 +1389,9 @@ void PluginProcessor::resetPlaybackState() noexcept
     startOffsetValid.store (false, std::memory_order_relaxed);
     matchedNoteOnCounter.store (0, std::memory_order_relaxed);
     missedNoteOnCounter.store (0, std::memory_order_relaxed);
+    lastTimingDeltaMs.store (0.0f, std::memory_order_relaxed);
+    lastNoteOffDeltaMs.store (0.0f, std::memory_order_relaxed);
+    lastVelocityDelta.store (0.0f, std::memory_order_relaxed);
     resetVelocityStats();
 
     if (auto ref = std::atomic_load (&referenceData))

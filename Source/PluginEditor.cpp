@@ -16,7 +16,7 @@ namespace
 void PluginEditor::PulseIndicator::paint (juce::Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat();
-    g.setColour (active ? juce::Colours::white : juce::Colours::darkgrey);
+    g.setColour (active ? activeColour : inactiveColour);
     g.fillEllipse (bounds);
     g.setColour (juce::Colours::black.withAlpha (0.4f));
     g.drawEllipse (bounds, 1.0f);
@@ -31,6 +31,159 @@ void PluginEditor::PulseIndicator::setActive (bool shouldBeActive)
     repaint();
 }
 
+void PluginEditor::PulseIndicator::setColours (juce::Colour active, juce::Colour inactive)
+{
+    activeColour = active;
+    inactiveColour = inactive;
+    repaint();
+}
+
+void PluginEditor::CorrectionDisplay::paint (juce::Graphics& g)
+{
+    const auto bounds = getLocalBounds().toFloat().reduced (8.0f);
+    const auto center = bounds.getCentre();
+    const float width = bounds.getWidth();
+    const float height = bounds.getHeight();
+    const float scale = juce::jmin (width, height) * 0.38f;
+
+    const auto shadowBounds = bounds.translated (0.0f, 4.0f);
+    g.setColour (juce::Colours::black.withAlpha (0.35f));
+    g.fillRoundedRectangle (shadowBounds, 12.0f);
+
+    juce::ColourGradient panelGrad (juce::Colour (0x1a1f28),
+        bounds.getTopLeft(),
+        juce::Colour (0x0a0c12),
+        bounds.getBottomRight(), false);
+    g.setGradientFill (panelGrad);
+    g.fillRoundedRectangle (bounds, 12.0f);
+
+    g.setColour (juce::Colours::white.withAlpha (0.06f));
+    g.drawRoundedRectangle (bounds, 12.0f, 1.0f);
+
+    const juce::Point<float> origin (center.x, center.y + scale * 0.25f);
+    const juce::Point<float> axisX (scale * 0.75f, scale * 0.38f);
+    const juce::Point<float> axisY (-scale * 0.75f, scale * 0.38f);
+    const juce::Point<float> axisZ (0.0f, -scale * 0.9f);
+
+    const juce::Point<float> baseA = origin;
+    const juce::Point<float> baseB = origin + axisX;
+    const juce::Point<float> baseD = origin + axisY;
+    const juce::Point<float> baseC = baseB + axisY;
+
+    const juce::Point<float> topA = baseA + axisZ;
+    const juce::Point<float> topB = baseB + axisZ;
+    const juce::Point<float> topC = baseC + axisZ;
+    const juce::Point<float> topD = baseD + axisZ;
+
+    juce::Path basePlane;
+    basePlane.startNewSubPath (baseA);
+    basePlane.lineTo (baseB);
+    basePlane.lineTo (baseC);
+    basePlane.lineTo (baseD);
+    basePlane.closeSubPath();
+    g.setColour (juce::Colour (0x0d1016).withAlpha (0.85f));
+    g.fillPath (basePlane);
+
+    juce::Path topPlane;
+    topPlane.startNewSubPath (topA);
+    topPlane.lineTo (topB);
+    topPlane.lineTo (topC);
+    topPlane.lineTo (topD);
+    topPlane.closeSubPath();
+    g.setColour (juce::Colours::white.withAlpha (0.04f));
+    g.fillPath (topPlane);
+
+    g.setColour (juce::Colours::white.withAlpha (0.12f));
+    g.drawLine (baseA.x, baseA.y, topA.x, topA.y, 1.0f);
+    g.drawLine (baseB.x, baseB.y, topB.x, topB.y, 1.0f);
+    g.drawLine (baseC.x, baseC.y, topC.x, topC.y, 1.0f);
+    g.drawLine (baseD.x, baseD.y, topD.x, topD.y, 1.0f);
+
+    g.setColour (juce::Colours::white.withAlpha (0.2f));
+    g.strokePath (basePlane, juce::PathStrokeType (1.1f));
+    g.strokePath (topPlane, juce::PathStrokeType (1.0f));
+
+    g.setColour (juce::Colours::white.withAlpha (0.12f));
+    for (int i = 1; i <= 4; ++i)
+    {
+        const float t = static_cast<float> (i) / 5.0f;
+        const auto p1 = baseA + axisX * t;
+        const auto p2 = baseD + axisX * t;
+        g.drawLine (p1.x, p1.y, p2.x, p2.y, 1.0f);
+
+        const auto q1 = baseA + axisY * t;
+        const auto q2 = baseB + axisY * t;
+        g.drawLine (q1.x, q1.y, q2.x, q2.y, 1.0f);
+    }
+
+    auto drawAxis = [&g](juce::Point<float> start, juce::Point<float> end, juce::Colour colour)
+    {
+        g.setColour (colour.withAlpha (0.3f));
+        g.drawLine (start.x, start.y, end.x, end.y, 4.0f);
+        g.setColour (colour.withAlpha (0.9f));
+        g.drawLine (start.x, start.y, end.x, end.y, 2.0f);
+    };
+
+    drawAxis (baseA, baseB, juce::Colour (0x4cc3ff));
+    drawAxis (baseA, baseD, juce::Colour (0xff5f8f));
+    drawAxis (baseA, topA, juce::Colour (0x9cf25f));
+
+    const float x = smoothedOn;
+    const float y = smoothedOff;
+    const float z = smoothedVel;
+    const juce::Point<float> position = origin + axisX * x + axisY * y + axisZ * z;
+    const juce::Point<float> shadowPos = origin + axisX * x + axisY * y;
+
+    const float magnitude = juce::jlimit (0.0f, 1.0f, smoothedMagnitude);
+    const float hue = juce::jmap (magnitude, 0.62f, 0.06f);
+    const juce::Colour glowColour = juce::Colour::fromHSV (hue, 0.9f, 1.0f, 0.95f);
+
+    const float shadowRadius = 10.0f + magnitude * 12.0f;
+    g.setColour (juce::Colours::black.withAlpha (0.4f));
+    g.fillEllipse (shadowPos.x - shadowRadius * 1.2f, shadowPos.y - shadowRadius * 0.6f,
+        shadowRadius * 2.4f, shadowRadius * 1.2f);
+
+    g.setColour (juce::Colours::white.withAlpha (0.12f));
+    g.drawLine (shadowPos.x, shadowPos.y, position.x, position.y, 1.0f);
+
+    const float orbRadius = 10.0f + magnitude * 12.0f;
+    juce::ColourGradient orbGrad (glowColour,
+        { position.x - orbRadius * 0.4f, position.y - orbRadius * 0.5f },
+        juce::Colours::black.withAlpha (0.0f),
+        { position.x + orbRadius, position.y + orbRadius }, true);
+    g.setGradientFill (orbGrad);
+    g.fillEllipse (position.x - orbRadius, position.y - orbRadius,
+        orbRadius * 2.0f, orbRadius * 2.0f);
+
+    g.setColour (juce::Colours::white.withAlpha (0.3f));
+    g.drawEllipse (position.x - orbRadius, position.y - orbRadius,
+        orbRadius * 2.0f, orbRadius * 2.0f, 1.0f);
+
+    g.setColour (juce::Colours::white.withAlpha (0.25f));
+    g.fillEllipse (position.x - orbRadius * 0.35f, position.y - orbRadius * 0.45f,
+        orbRadius * 0.6f, orbRadius * 0.6f);
+}
+
+void PluginEditor::CorrectionDisplay::setValues (float noteOnDeltaMs,
+                                                 float noteOffDeltaMs,
+                                                 float velocityDelta,
+                                                 float slackMs)
+{
+    const float timeScale = juce::jmax (1.0f, slackMs);
+    const float targetOn = juce::jlimit (-1.0f, 1.0f, noteOnDeltaMs / timeScale);
+    const float targetOff = juce::jlimit (-1.0f, 1.0f, noteOffDeltaMs / timeScale);
+    const float targetVel = juce::jlimit (-1.0f, 1.0f, velocityDelta / 127.0f);
+
+    smoothedOn += 0.18f * (targetOn - smoothedOn);
+    smoothedOff += 0.18f * (targetOff - smoothedOff);
+    smoothedVel += 0.18f * (targetVel - smoothedVel);
+    const float targetMag = std::sqrt (smoothedOn * smoothedOn
+        + smoothedOff * smoothedOff + smoothedVel * smoothedVel);
+    smoothedMagnitude += 0.2f * (targetMag - smoothedMagnitude);
+
+    repaint();
+}
+
 PluginEditor::PluginEditor (PluginProcessor& p)
 : juce::AudioProcessorEditor (&p), processor (p)
 {
@@ -40,6 +193,39 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     referenceStatusLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (referenceStatusLabel);
+
+    referenceLoadedIndicator.setColours (juce::Colours::green, juce::Colours::darkgrey);
+    referenceLoadedIndicator.setActive (false);
+    addAndMakeVisible (referenceLoadedIndicator);
+
+    virtuosoTabButton.setButtonText ("Virtuoso");
+    virtuosoTabButton.setClickingTogglesState (true);
+    virtuosoTabButton.setEnabled (false);
+    addAndMakeVisible (virtuosoTabButton);
+
+    influencerTabButton.setButtonText ("Influencer");
+    influencerTabButton.setClickingTogglesState (true);
+    influencerTabButton.setToggleState (true, juce::dontSendNotification);
+    addAndMakeVisible (influencerTabButton);
+
+    actualiserTabButton.setButtonText ("Actualiser");
+    actualiserTabButton.setClickingTogglesState (true);
+    actualiserTabButton.setEnabled (false);
+    addAndMakeVisible (actualiserTabButton);
+
+    tabContainer.setText ("");
+    tabContainer.setInterceptsMouseClicks (false, false);
+    addAndMakeVisible (tabContainer);
+
+    developerBox.setText ("");
+    developerBox.setInterceptsMouseClicks (false, false);
+    addAndMakeVisible (developerBox);
+
+    developerToggle.setButtonText ("Developer");
+    developerToggle.setClickingTogglesState (true);
+    addAndMakeVisible (developerToggle);
+
+    addAndMakeVisible (correctionDisplay);
 
     const auto referenceDir = juce::File::getSpecialLocation (juce::File::userHomeDirectory)
         .getChildFile ("Downloads")
@@ -92,12 +278,13 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         juce::String errorMessage;
         if (processor.loadReferenceFromFile (referenceFiles[index], errorMessage))
         {
-            referenceStatusLabel.setText ("Loaded: " + referenceFiles[index].getFileNameWithoutExtension(),
-                juce::dontSendNotification);
+            referenceStatusLabel.setText ("", juce::dontSendNotification);
+            referenceLoadedIndicator.setActive (true);
         }
         else
         {
             referenceStatusLabel.setText ("Load failed: " + errorMessage, juce::dontSendNotification);
+            referenceLoadedIndicator.setActive (false);
         }
     };
 
@@ -109,8 +296,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
             if (referenceFiles[i].getFullPathName() == currentPath)
             {
                 referenceBox.setSelectedId (i + 1, juce::dontSendNotification);
-                referenceStatusLabel.setText ("Loaded: " + referenceFiles[i].getFileNameWithoutExtension(),
-                    juce::dontSendNotification);
+                referenceStatusLabel.setText ("", juce::dontSendNotification);
+                referenceLoadedIndicator.setActive (true);
                 break;
             }
         }
@@ -118,6 +305,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     if (! referenceFiles.isEmpty() && referenceStatusLabel.getText().isEmpty())
         referenceStatusLabel.setText ("No reference loaded.", juce::dontSendNotification);
+    if (currentPath.isEmpty())
+        referenceLoadedIndicator.setActive (false);
 
     slackLabel.setText ("Slack (ms)", juce::dontSendNotification);
     slackLabel.setJustificationType (juce::Justification::centred);
@@ -136,22 +325,31 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     clusterWindowSlider.setRange (20.0, 1000.0, 1.0);
     addAndMakeVisible (clusterWindowSlider);
 
-    correctionLabel.setText ("Correction", juce::dontSendNotification);
-    correctionLabel.setJustificationType (juce::Justification::centred);
+    correctionLabel.setText ("Influence", juce::dontSendNotification);
+    correctionLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (correctionLabel);
 
-    correctionSlider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    correctionSlider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 20);
+    correctionSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    correctionSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 20);
+    correctionSlider.textFromValueFunction = [] (double value)
+    {
+        return juce::String (value * 100.0, 0);
+    };
+    correctionSlider.valueFromTextFunction = [] (const juce::String& text)
+    {
+        return juce::jlimit (0.0, 1.0, text.getDoubleValue() / 100.0);
+    };
+    correctionSlider.setTextValueSuffix ("%");
     addAndMakeVisible (correctionSlider);
 
     inputLabel.setText ("Input", juce::dontSendNotification);
-    inputLabel.setJustificationType (juce::Justification::centred);
+    inputLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (inputLabel);
 
     addAndMakeVisible (inputIndicator);
 
     outputLabel.setText ("Output", juce::dontSendNotification);
-    outputLabel.setJustificationType (juce::Justification::centred);
+    outputLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (outputLabel);
 
     addAndMakeVisible (outputIndicator);
@@ -255,6 +453,43 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         processor.apvts, kParamBypass, bypassButton);
     tempoShiftAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor.apvts, kParamTempoShiftBackBar, tempoShiftButton);
+
+    developerToggle.setToggleState (false, juce::dontSendNotification);
+    auto updateDeveloperVisibility = [this]()
+    {
+        const bool visible = developerToggle.getToggleState();
+        correctionDisplay.setVisible (! visible);
+        referenceStatusLabel.setVisible (visible);
+        slackLabel.setVisible (visible);
+        slackSlider.setVisible (visible);
+        clusterWindowLabel.setVisible (visible);
+        clusterWindowSlider.setVisible (visible);
+        timingLabel.setVisible (visible);
+        timingValueLabel.setVisible (visible);
+        transportLabel.setVisible (visible);
+        transportValueLabel.setVisible (visible);
+        matchLabel.setVisible (visible);
+        matchValueLabel.setVisible (visible);
+        cpuLabel.setVisible (visible);
+        cpuValueLabel.setVisible (visible);
+        bpmLabel.setVisible (visible);
+        bpmValueLabel.setVisible (visible);
+        refIoiLabel.setVisible (visible);
+        refIoiValueLabel.setVisible (visible);
+        startOffsetLabel.setVisible (visible);
+        startOffsetValueLabel.setVisible (visible);
+        resetStartOffsetButton.setVisible (visible);
+        copyLogButton.setVisible (visible);
+        tempoShiftButton.setVisible (visible);
+        velocityButton.setVisible (visible);
+        muteButton.setVisible (visible);
+        bypassButton.setVisible (visible);
+    };
+    developerToggle.onClick = [updateDeveloperVisibility]()
+    {
+        updateDeveloperVisibility();
+    };
+    updateDeveloperVisibility();
 
     auto applyClusterWindow = [this]
     {
@@ -395,9 +630,12 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     copyLogButton.setEnabled (! lastTransportPlaying);
     clusterWindowSlider.setEnabled (! lastTransportPlaying);
 
+    tabContainer.toBack();
+    developerBox.toBack();
+
     startTimerHz (30);
 
-    setSize (670, 530);
+    setSize (670, 605);
 }
 
 void PluginEditor::paint (juce::Graphics& g)
@@ -416,79 +654,108 @@ void PluginEditor::resized()
     auto footer = r.removeFromBottom (18);
     buildInfoLabel.setBounds (footer);
 
-    auto referenceRow = r.removeFromTop (26);
-    referenceLabel.setBounds (referenceRow.removeFromLeft (120));
-    referenceBox.setBounds (referenceRow.removeFromLeft (260));
-    referenceStatusLabel.setBounds (referenceRow);
+    auto topBar = r.removeFromTop (40);
+    auto ioArea = topBar.removeFromRight (120);
+    auto inputArea = ioArea.removeFromTop (20);
+    inputLabel.setBounds (inputArea.removeFromLeft (60));
+    inputIndicator.setBounds (inputArea.removeFromLeft (20).withSizeKeepingCentre (14, 14));
+    auto outputArea = ioArea.removeFromTop (20);
+    outputLabel.setBounds (outputArea.removeFromLeft (60));
+    outputIndicator.setBounds (outputArea.removeFromLeft (20).withSizeKeepingCentre (14, 14));
 
-    r.removeFromTop (10);
+    auto tabStrip = r.removeFromTop (28);
+    auto tabSlot = tabStrip.removeFromLeft (120);
+    virtuosoTabButton.setBounds (tabSlot);
+    tabSlot = tabStrip.removeFromLeft (120);
+    influencerTabButton.setBounds (tabSlot);
+    tabSlot = tabStrip.removeFromLeft (120);
+    actualiserTabButton.setBounds (tabSlot);
 
-    auto controlsArea = r.removeFromLeft (360);
-    auto statusArea = r.reduced (10, 0);
+    r.removeFromTop (4);
 
-    auto knobRow = controlsArea.removeFromTop (150);
-    auto slackArea = knobRow.removeFromLeft (180);
-    slackLabel.setBounds (slackArea.removeFromTop (20));
-    slackSlider.setBounds (slackArea.reduced (10));
+    auto tabArea = r.removeFromTop (110);
+    tabContainer.setBounds (tabArea);
+    auto tabInner = tabArea.reduced (12);
+    auto leftColumn = tabInner.removeFromLeft (260);
+    tabInner.removeFromLeft (12);
+    auto rightColumn = tabInner;
 
-    auto correctionArea = knobRow;
-    correctionLabel.setBounds (correctionArea.removeFromTop (20));
-    correctionSlider.setBounds (correctionArea.reduced (10));
+    referenceLabel.setBounds (leftColumn.removeFromTop (18));
+    auto referenceRow = leftColumn.removeFromTop (26);
+    referenceBox.setBounds (referenceRow.removeFromLeft (220));
+    referenceLoadedIndicator.setBounds (referenceRow.removeFromLeft (18).withSizeKeepingCentre (12, 12));
 
-    controlsArea.removeFromTop (6);
-    auto clusterArea = controlsArea.removeFromTop (50);
+    correctionLabel.setBounds (rightColumn.removeFromTop (18));
+    correctionSlider.setBounds (rightColumn.removeFromTop (26));
+
+    r.removeFromTop (6);
+
+    auto developerArea = r;
+    auto developerToggleArea = developerArea.removeFromBottom (26);
+    developerToggle.setBounds (developerToggleArea.removeFromLeft (110));
+
+    developerBox.setBounds (developerArea);
+    auto devInner = developerArea.reduced (10);
+    auto devHeader = devInner.removeFromTop (24);
+    referenceStatusLabel.setBounds (devHeader);
+
+    auto devContent = devInner;
+    auto devLeft = devContent.removeFromLeft (220);
+    devContent.removeFromLeft (12);
+    auto devRight = devContent;
+
+    auto slackArea = devLeft.removeFromTop (120);
+    slackLabel.setBounds (slackArea.removeFromTop (18));
+    slackSlider.setBounds (slackArea);
+
+    devLeft.removeFromTop (8);
+    auto clusterArea = devLeft.removeFromTop (50);
     clusterWindowLabel.setBounds (clusterArea.removeFromTop (18));
     clusterWindowSlider.setBounds (clusterArea);
 
-    auto transportArea = statusArea.removeFromTop (24);
+    auto transportArea = devRight.removeFromTop (24);
     transportLabel.setBounds (transportArea.removeFromLeft (90));
     transportValueLabel.setBounds (transportArea);
 
-    auto inputArea = statusArea.removeFromTop (38);
-    inputLabel.setBounds (inputArea.removeFromTop (18));
-    inputIndicator.setBounds (inputArea.removeFromTop (20).withSizeKeepingCentre (18, 18));
-
-    auto outputArea = statusArea.removeFromTop (38);
-    outputLabel.setBounds (outputArea.removeFromTop (18));
-    outputIndicator.setBounds (outputArea.removeFromTop (20).withSizeKeepingCentre (18, 18));
-
-    auto timingArea = statusArea.removeFromTop (40);
+    auto timingArea = devRight.removeFromTop (40);
     timingLabel.setBounds (timingArea.removeFromTop (18));
     timingValueLabel.setBounds (timingArea.removeFromTop (20));
 
-    auto matchRow = statusArea.removeFromTop (24);
+    auto matchRow = devRight.removeFromTop (24);
     matchLabel.setBounds (matchRow.removeFromLeft (90));
     matchValueLabel.setBounds (matchRow);
 
-    auto cpuRow = statusArea.removeFromTop (24);
+    auto cpuRow = devRight.removeFromTop (24);
     cpuLabel.setBounds (cpuRow.removeFromLeft (90));
     cpuValueLabel.setBounds (cpuRow);
 
-    auto bpmRow = statusArea.removeFromTop (24);
+    auto bpmRow = devRight.removeFromTop (24);
     bpmLabel.setBounds (bpmRow.removeFromLeft (90));
     bpmValueLabel.setBounds (bpmRow);
 
-    auto refIoiRow = statusArea.removeFromTop (24);
+    auto refIoiRow = devRight.removeFromTop (24);
     refIoiLabel.setBounds (refIoiRow.removeFromLeft (130));
     refIoiValueLabel.setBounds (refIoiRow);
 
-    auto startOffsetRow = statusArea.removeFromTop (24);
+    auto startOffsetRow = devRight.removeFromTop (24);
     startOffsetLabel.setBounds (startOffsetRow.removeFromLeft (90));
     startOffsetValueLabel.setBounds (startOffsetRow);
 
-    auto resetOffsetRow = statusArea.removeFromTop (24);
+    auto resetOffsetRow = devRight.removeFromTop (24);
     resetStartOffsetButton.setBounds (resetOffsetRow);
 
-    auto copyRow = statusArea.removeFromTop (26);
+    auto copyRow = devRight.removeFromTop (26);
     copyLogButton.setBounds (copyRow);
 
-    auto tempoShiftRow = statusArea.removeFromTop (24);
+    auto tempoShiftRow = devRight.removeFromTop (24);
     tempoShiftButton.setBounds (tempoShiftRow);
 
-    statusArea.removeFromTop (4);
-    velocityButton.setBounds (statusArea.removeFromTop (24));
-    muteButton.setBounds (statusArea.removeFromTop (24));
-    bypassButton.setBounds (statusArea.removeFromTop (24));
+    devRight.removeFromTop (4);
+    velocityButton.setBounds (devRight.removeFromTop (24));
+    muteButton.setBounds (devRight.removeFromTop (24));
+    bypassButton.setBounds (devRight.removeFromTop (24));
+
+    correctionDisplay.setBounds (developerArea.reduced (12));
 }
 
 void PluginEditor::timerCallback()
@@ -516,6 +783,11 @@ void PluginEditor::timerCallback()
 
     if (outputIndicator.isActive() && (nowMs - lastOutputFlashMs) > 120.0)
         outputIndicator.setActive (false);
+
+    correctionDisplay.setValues (processor.getLastTimingDeltaMs(),
+        processor.getLastNoteOffDeltaMs(),
+        processor.getLastVelocityDelta(),
+        static_cast<float> (slackSlider.getValue()));
 
     float deltaMs = processor.getLastTimingDeltaMs();
     if (std::abs (deltaMs) < 0.005f)
