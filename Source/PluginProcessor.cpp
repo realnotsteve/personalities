@@ -119,6 +119,26 @@ float PluginProcessor::getLastTimingDeltaMs() const noexcept
     return lastTimingDeltaMs.load (std::memory_order_relaxed);
 }
 
+uint32_t PluginProcessor::getMatchedNoteOnCounter() const noexcept
+{
+    return matchedNoteOnCounter.load (std::memory_order_relaxed);
+}
+
+uint32_t PluginProcessor::getMissedNoteOnCounter() const noexcept
+{
+    return missedNoteOnCounter.load (std::memory_order_relaxed);
+}
+
+bool PluginProcessor::isTransportPlaying() const noexcept
+{
+    return transportPlaying.load (std::memory_order_relaxed);
+}
+
+float PluginProcessor::getCpuLoadPercent() const noexcept
+{
+    return cpuLoadPercent.load (std::memory_order_relaxed);
+}
+
 bool PluginProcessor::computeAutoMatchSettings (float& matchWindowMs, float& slackMs) const
 {
     auto reference = std::atomic_load (&referenceData);
@@ -184,6 +204,7 @@ void PluginProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
     transportPlaying.store (false, std::memory_order_relaxed);
     transportWasPlaying = false;
     resetPlaybackState();
+    cpuLoadPercent.store (0.0f, std::memory_order_relaxed);
 
     outputBuffer.clear();
     outputBuffer.ensureSize (kMaxOutputEvents * (kMaxMidiBytes + kMidiEventOverheadBytes));
@@ -219,6 +240,7 @@ bool PluginProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
+    const auto cpuStartTick = juce::Time::getHighResolutionTicks();
 
     // Always silent audio for host stability
     buffer.clear();
@@ -230,6 +252,24 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         queueSize = 0;
 
     const int numSamples = buffer.getNumSamples();
+    auto updateCpuLoad = [this, cpuStartTick, numSamples]()
+    {
+        const auto ticksPerSecond = juce::Time::getHighResolutionTicksPerSecond();
+        if (ticksPerSecond <= 0 || sampleRateHz <= 0.0 || numSamples <= 0)
+            return;
+
+        const auto cpuEndTick = juce::Time::getHighResolutionTicks();
+        const double elapsedSeconds = static_cast<double> (cpuEndTick - cpuStartTick)
+            / static_cast<double> (ticksPerSecond);
+        const double blockSeconds = static_cast<double> (numSamples) / sampleRateHz;
+        if (blockSeconds <= 0.0)
+            return;
+
+        const float loadPercent = static_cast<float> ((elapsedSeconds / blockSeconds) * 100.0);
+        const float previous = cpuLoadPercent.load (std::memory_order_relaxed);
+        const float smoothed = previous * 0.9f + loadPercent * 0.1f;
+        cpuLoadPercent.store (smoothed, std::memory_order_relaxed);
+    };
     bool isPlaying = false;
     int64_t hostSample = -1;
 
@@ -322,8 +362,16 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                         matchWindowSamples,
                         referenceStartSample,
                         *reference);
-                    if (refIndex >= 0 && activeNoteCount < kMaxActiveNotes)
-                        activeNotes[activeNoteCount++] = { static_cast<int> (data[1]), channel, refIndex };
+                    if (refIndex >= 0)
+                    {
+                        matchedNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
+                        if (activeNoteCount < kMaxActiveNotes)
+                            activeNotes[activeNoteCount++] = { static_cast<int> (data[1]), channel, refIndex };
+                    }
+                    else
+                    {
+                        missedNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
+                    }
                 }
             }
             else if (status == 0x80 || (status == 0x90 && data[2] == 0))
@@ -350,6 +398,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         timelineSample = blockEnd;
         lastHostSample = hostSample;
         transportWasPlaying = isPlaying;
+        updateCpuLoad();
         return;
     }
 
@@ -422,6 +471,10 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                         *reference);
                     if (refIndex >= 0 && refIndex < static_cast<int> (reference->notes.size()))
                         refNote = &reference->notes[refIndex];
+                    if (refIndex >= 0)
+                        matchedNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
+                    else
+                        missedNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
                 }
 
                 const uint64_t alignedRefSample = (refNote != nullptr && refNote->onSample >= referenceStartSample)
@@ -529,6 +582,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     timelineSample = blockEnd;
     lastHostSample = hostSample;
     transportWasPlaying = isPlaying;
+    updateCpuLoad();
 }
 
 void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
@@ -702,6 +756,7 @@ int PluginProcessor::matchReferenceNoteForOn (int noteNumber,
             : 0;
         const uint64_t windowEnd = userSample + matchWindowSamples;
 
+        int firstCandidateIndex = -1;
         int bestIndex = -1;
         uint64_t bestDistance = 0;
 
@@ -715,10 +770,12 @@ int PluginProcessor::matchReferenceNoteForOn (int noteNumber,
                 ? referenceTransportStartSample + (refNote.onSample - referenceStartSample)
                 : referenceTransportStartSample;
 
-            if (alignedRefSample > windowEnd)
-                break;
             if (alignedRefSample < windowStart)
                 continue;
+            if (firstCandidateIndex < 0)
+                firstCandidateIndex = i;
+            if (alignedRefSample > windowEnd)
+                break;
             if (refNote.noteNumber != noteNumber || refNote.channel != channel)
                 continue;
 
@@ -733,7 +790,10 @@ int PluginProcessor::matchReferenceNoteForOn (int noteNumber,
             }
         }
 
-        selectedIndex = (bestIndex >= 0) ? bestIndex : referenceCursor;
+        selectedIndex = (bestIndex >= 0) ? bestIndex : -1;
+
+        if (selectedIndex < 0 && firstCandidateIndex >= 0 && firstCandidateIndex > referenceCursor)
+            referenceCursor = firstCandidateIndex;
     }
 
     if (selectedIndex < 0 || selectedIndex >= totalNotes)
@@ -756,6 +816,8 @@ void PluginProcessor::resetPlaybackState() noexcept
     orderCounter = 0;
     activeNoteCount = 0;
     referenceCursor = 0;
+    matchedNoteOnCounter.store (0, std::memory_order_relaxed);
+    missedNoteOnCounter.store (0, std::memory_order_relaxed);
 
     if (auto ref = std::atomic_load (&referenceData))
     {

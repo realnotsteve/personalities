@@ -47,6 +47,10 @@ public:
     uint32_t getInputNoteOnCounter() const noexcept;
     uint32_t getOutputNoteOnCounter() const noexcept;
     float getLastTimingDeltaMs() const noexcept;
+    uint32_t getMatchedNoteOnCounter() const noexcept;
+    uint32_t getMissedNoteOnCounter() const noexcept;
+    bool isTransportPlaying() const noexcept;
+    float getCpuLoadPercent() const noexcept;
     bool computeAutoMatchSettings (float& matchWindowMs, float& slackMs) const;
     void applyAutoMatchSettings (float matchWindowMs, float slackMs);
 
@@ -126,6 +130,9 @@ private:
     std::atomic<uint32_t> inputNoteOnCounter { 0 };
     std::atomic<uint32_t> outputNoteOnCounter { 0 };
     std::atomic<float> lastTimingDeltaMs { 0.0f };
+    std::atomic<uint32_t> matchedNoteOnCounter { 0 };
+    std::atomic<uint32_t> missedNoteOnCounter { 0 };
+    std::atomic<float> cpuLoadPercent { 0.0f };
     std::shared_ptr<ReferenceData> referenceData;
     std::array<ActiveNote, kMaxActiveNotes> activeNotes {};
     int activeNoteCount = 0;

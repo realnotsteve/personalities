@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.0.11 (2026-01-01)
+
+- **Summary:** PERSONALITIES (PRISM): Update 4 areas (e.g., CMakeLists.txt)
+- **Files:**
+  - `CMakeLists.txt`
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `Source/PluginProcessor.cpp`
+  - `Source/PluginProcessor.h`
+  - `assets/reference_performance.mid`
+  - `assets/user_performance.mid`
+  - `tools/OfflineMatchSim.cpp`
+
 ## v0.0.10 (2025-12-31)
 
 - **Summary:** PERSONALITIES (PRISM): Update Source

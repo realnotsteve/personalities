@@ -166,6 +166,33 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     timingValueLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (timingValueLabel);
 
+    transportLabel.setText ("Transport", juce::dontSendNotification);
+    transportLabel.setJustificationType (juce::Justification::centredLeft);
+    addAndMakeVisible (transportLabel);
+
+    transportValueLabel.setText ("Stopped", juce::dontSendNotification);
+    transportValueLabel.setJustificationType (juce::Justification::centredLeft);
+    transportValueLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (transportValueLabel);
+
+    matchLabel.setText ("Match/Miss", juce::dontSendNotification);
+    matchLabel.setJustificationType (juce::Justification::centredLeft);
+    addAndMakeVisible (matchLabel);
+
+    matchValueLabel.setText ("0 / 0", juce::dontSendNotification);
+    matchValueLabel.setJustificationType (juce::Justification::centredLeft);
+    matchValueLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (matchValueLabel);
+
+    cpuLabel.setText ("CPU", juce::dontSendNotification);
+    cpuLabel.setJustificationType (juce::Justification::centredLeft);
+    addAndMakeVisible (cpuLabel);
+
+    cpuValueLabel.setText ("0.0%", juce::dontSendNotification);
+    cpuValueLabel.setJustificationType (juce::Justification::centredLeft);
+    cpuValueLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (cpuValueLabel);
+
     velocityButton.setButtonText ("Vel Corr");
     velocityButton.setClickingTogglesState (true);
     addAndMakeVisible (velocityButton);
@@ -228,9 +255,30 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     const juce::String timingPrefix = (lastTimingDeltaMs > 0.0f) ? "+" : "";
     timingValueLabel.setText (timingPrefix + juce::String (lastTimingDeltaMs, 2),
         juce::dontSendNotification);
+
+    lastMatchedNoteOnCounter = processor.getMatchedNoteOnCounter();
+    lastMissedNoteOnCounter = processor.getMissedNoteOnCounter();
+    const uint32_t initialTotal = lastMatchedNoteOnCounter + lastMissedNoteOnCounter;
+    const float initialMissPercent = initialTotal > 0
+        ? (100.0f * static_cast<float> (lastMissedNoteOnCounter) / static_cast<float> (initialTotal))
+        : 0.0f;
+    matchValueLabel.setText (juce::String (lastMatchedNoteOnCounter) + " / "
+            + juce::String (lastMissedNoteOnCounter) + " ("
+            + juce::String (initialMissPercent, 1) + "%)",
+        juce::dontSendNotification);
+
+    lastTransportPlaying = processor.isTransportPlaying();
+    transportValueLabel.setText (lastTransportPlaying ? "Playing" : "Stopped",
+        juce::dontSendNotification);
+    transportValueLabel.setColour (juce::Label::textColourId,
+        lastTransportPlaying ? juce::Colours::lightgreen : juce::Colours::lightgrey);
+
+    lastCpuPercent = processor.getCpuLoadPercent();
+    cpuValueLabel.setText (juce::String (lastCpuPercent, 1) + "%", juce::dontSendNotification);
+
     startTimerHz (30);
 
-    setSize (520, 320);
+    setSize (670, 380);
 }
 
 void PluginEditor::paint (juce::Graphics& g)
@@ -275,6 +323,10 @@ void PluginEditor::resized()
     matchWindowLabel.setBounds (matchLabelRow);
     matchWindowSlider.setBounds (matchArea);
 
+    auto transportArea = statusArea.removeFromTop (24);
+    transportLabel.setBounds (transportArea.removeFromLeft (90));
+    transportValueLabel.setBounds (transportArea);
+
     auto inputArea = statusArea.removeFromTop (38);
     inputLabel.setBounds (inputArea.removeFromTop (18));
     inputIndicator.setBounds (inputArea.removeFromTop (20).withSizeKeepingCentre (18, 18));
@@ -286,6 +338,14 @@ void PluginEditor::resized()
     auto timingArea = statusArea.removeFromTop (40);
     timingLabel.setBounds (timingArea.removeFromTop (18));
     timingValueLabel.setBounds (timingArea.removeFromTop (20));
+
+    auto matchRow = statusArea.removeFromTop (24);
+    matchLabel.setBounds (matchRow.removeFromLeft (90));
+    matchValueLabel.setBounds (matchRow);
+
+    auto cpuRow = statusArea.removeFromTop (24);
+    cpuLabel.setBounds (cpuRow.removeFromLeft (90));
+    cpuValueLabel.setBounds (cpuRow);
 
     statusArea.removeFromTop (6);
     velocityButton.setBounds (statusArea.removeFromTop (24));
@@ -328,5 +388,36 @@ void PluginEditor::timerCallback()
         lastTimingDeltaMs = deltaMs;
         const juce::String prefix = (deltaMs > 0.0f) ? "+" : "";
         timingValueLabel.setText (prefix + juce::String (deltaMs, 2), juce::dontSendNotification);
+    }
+
+    const bool isPlaying = processor.isTransportPlaying();
+    if (isPlaying != lastTransportPlaying)
+    {
+        lastTransportPlaying = isPlaying;
+        transportValueLabel.setText (isPlaying ? "Playing" : "Stopped", juce::dontSendNotification);
+        transportValueLabel.setColour (juce::Label::textColourId,
+            isPlaying ? juce::Colours::lightgreen : juce::Colours::lightgrey);
+    }
+
+    const auto matched = processor.getMatchedNoteOnCounter();
+    const auto missed = processor.getMissedNoteOnCounter();
+    if (matched != lastMatchedNoteOnCounter || missed != lastMissedNoteOnCounter)
+    {
+        lastMatchedNoteOnCounter = matched;
+        lastMissedNoteOnCounter = missed;
+        const uint32_t total = matched + missed;
+        const float missPercent = total > 0
+            ? (100.0f * static_cast<float> (missed) / static_cast<float> (total))
+            : 0.0f;
+        matchValueLabel.setText (juce::String (matched) + " / " + juce::String (missed)
+                + " (" + juce::String (missPercent, 1) + "%)",
+            juce::dontSendNotification);
+    }
+
+    const float cpuPercent = processor.getCpuLoadPercent();
+    if (std::abs (cpuPercent - lastCpuPercent) > 0.1f)
+    {
+        lastCpuPercent = cpuPercent;
+        cpuValueLabel.setText (juce::String (cpuPercent, 1) + "%", juce::dontSendNotification);
     }
 }

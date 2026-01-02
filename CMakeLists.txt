@@ -77,6 +77,17 @@ target_link_libraries(Personalities_NoteFX PRIVATE
     juce::juce_gui_extra
 )
 
+juce_add_console_app(Personalities_OfflineMatchSim
+    PRODUCT_NAME "Personalities Offline Match Sim"
+)
+target_sources(Personalities_OfflineMatchSim PRIVATE
+    tools/OfflineMatchSim.cpp
+)
+juce_generate_juce_header(Personalities_OfflineMatchSim)
+target_link_libraries(Personalities_OfflineMatchSim PRIVATE
+    juce::juce_audio_basics
+)
+
 add_custom_target(Personalities_BuildInfo
     COMMAND ${CMAKE_COMMAND}
         -DOUTPUT_HEADER="${PERSONALITIES_BUILD_INFO_HEADER}"

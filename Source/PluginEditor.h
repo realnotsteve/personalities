@@ -45,6 +45,12 @@ private:
     PulseIndicator outputIndicator;
     juce::Label timingLabel;
     juce::Label timingValueLabel;
+    juce::Label transportLabel;
+    juce::Label transportValueLabel;
+    juce::Label matchLabel;
+    juce::Label matchValueLabel;
+    juce::Label cpuLabel;
+    juce::Label cpuValueLabel;
     juce::ToggleButton velocityButton;
     juce::ToggleButton muteButton;
     juce::ToggleButton bypassButton;
@@ -61,6 +67,10 @@ private:
     uint32_t lastOutputNoteOnCounter = 0;
     double lastOutputFlashMs = 0.0;
     float lastTimingDeltaMs = 0.0f;
+    uint32_t lastMatchedNoteOnCounter = 0;
+    uint32_t lastMissedNoteOnCounter = 0;
+    bool lastTransportPlaying = false;
+    float lastCpuPercent = 0.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 };
