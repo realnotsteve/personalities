@@ -202,6 +202,26 @@ float PluginProcessor::getReferenceBpm() const noexcept
     return referenceBpm.load (std::memory_order_relaxed);
 }
 
+float PluginProcessor::getReferenceIoiMinMs() const noexcept
+{
+    if (auto reference = std::atomic_load (&referenceData))
+    {
+        if (reference->minIoiSeconds > 0.0)
+            return static_cast<float> (reference->minIoiSeconds * 1000.0);
+    }
+    return -1.0f;
+}
+
+float PluginProcessor::getReferenceIoiMedianMs() const noexcept
+{
+    if (auto reference = std::atomic_load (&referenceData))
+    {
+        if (reference->medianIoiSeconds > 0.0)
+            return static_cast<float> (reference->medianIoiSeconds * 1000.0);
+    }
+    return -1.0f;
+}
+
 float PluginProcessor::getClusterWindowMs() const noexcept
 {
     if (auto reference = std::atomic_load (&referenceData))
@@ -331,6 +351,8 @@ void PluginProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
 
         if (ref->matched.size() != ref->notes.size())
             ref->matched.assign (ref->notes.size(), 0);
+        if (ref->clusterMatchedCounts.size() != ref->clusters.size())
+            ref->clusterMatchedCounts.assign (ref->clusters.size(), 0);
     }
 
     if (auto refShifted = std::atomic_load (&referenceDataShifted))
@@ -340,6 +362,8 @@ void PluginProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
 
         if (refShifted->matched.size() != refShifted->notes.size())
             refShifted->matched.assign (refShifted->notes.size(), 0);
+        if (refShifted->clusterMatchedCounts.size() != refShifted->clusters.size())
+            refShifted->clusterMatchedCounts.assign (refShifted->clusters.size(), 0);
     }
 
 }
@@ -495,6 +519,22 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     const float clusterWindowMs = hasReference
         ? static_cast<float> (reference->clusterWindowSeconds * 1000.0)
         : 0.0f;
+    int maxLookaheadClusters = 0;
+    if (hasReference && clusterWindowMs > 0.0f)
+    {
+        float slackMsForLookahead = slackMs;
+        if (sampleRateHz > 0.0 && isPlaying)
+        {
+            slackMsForLookahead = static_cast<float> (1000.0
+                * (static_cast<double> (latchedSlackSamples) / sampleRateHz));
+        }
+
+        const double lookaheadMs = static_cast<double> (slackMsForLookahead)
+            + static_cast<double> (clusterWindowMs);
+        const int slackBased = static_cast<int> (
+            std::ceil (lookaheadMs / static_cast<double> (clusterWindowMs)));
+        maxLookaheadClusters = juce::jlimit (1, kMaxClusterLookahead, slackBased);
+    }
     const ReferenceData* referenceForOffset = hasReference ? reference.get() : nullptr;
     auto captureStartOffsetIfNeeded = [&](uint64_t userSample)
     {
@@ -583,12 +623,14 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         const int channel = (data[0] & 0x0F) + 1;
         const int refIndex = matchReferenceNoteInCluster (static_cast<int> (data[1]),
             channel,
-            *reference);
+            *reference,
+            maxLookaheadClusters);
                     if (refIndex >= 0)
                     {
                         matchedNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
+                        const uint64_t noteOrder = noteOnOrderCounter++;
                         if (activeNoteCount < kMaxActiveNotes)
-                            activeNotes[activeNoteCount++] = { static_cast<int> (data[1]), channel, refIndex };
+                            activeNotes[activeNoteCount++] = { static_cast<int> (data[1]), channel, refIndex, noteOrder };
                         if (refIndex < static_cast<int> (reference->notes.size()))
                             referenceVelocityForStats = reference->notes[static_cast<size_t> (refIndex)].onVelocity;
                     }
@@ -615,15 +657,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 if (hasReference)
                 {
                     const int channel = (data[0] & 0x0F) + 1;
-                    for (int i = activeNoteCount - 1; i >= 0; --i)
-                    {
-                        if (activeNotes[i].noteNumber == data[1] && activeNotes[i].channel == channel)
-                        {
-                            activeNotes[i] = activeNotes[activeNoteCount - 1];
-                            --activeNoteCount;
-                            break;
-                        }
-                    }
+                    removeOldestActiveNote (static_cast<int> (data[1]), channel);
                 }
             }
         }
@@ -702,11 +736,23 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 {
                     refIndex = matchReferenceNoteInCluster (static_cast<int> (data[1]),
                         channel,
-                        *reference);
+                        *reference,
+                        maxLookaheadClusters);
                     if (refIndex >= 0 && refIndex < static_cast<int> (reference->notes.size()))
                         refNote = &reference->notes[refIndex];
                     if (refIndex >= 0)
+                    {
                         matchedNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
+                        if (activeNoteCount < kMaxActiveNotes)
+                        {
+                            const uint64_t noteOrder = noteOnOrderCounter++;
+                            activeNotes[activeNoteCount++] = { static_cast<int> (data[1]), channel, refIndex, noteOrder };
+                        }
+                        else
+                        {
+                            ++noteOnOrderCounter;
+                        }
+                    }
                     else
                     {
                         missedNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
@@ -751,28 +797,13 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                                        outVelocity };
                 enqueueEvent (outData, 3, dueSample, clampedOffset);
 
-                if (hasReference && refIndex >= 0 && activeNoteCount < kMaxActiveNotes)
-                {
-                    activeNotes[activeNoteCount++] = { static_cast<int> (data[1]), channel, refIndex };
-                }
             }
             else if (status == 0x80 || (status == 0x90 && data[2] == 0))
             {
                 int refIndex = -1;
 
                 if (hasReference)
-                {
-                    for (int i = activeNoteCount - 1; i >= 0; --i)
-                    {
-                        if (activeNotes[i].noteNumber == data[1] && activeNotes[i].channel == channel)
-                        {
-                            refIndex = activeNotes[i].refIndex;
-                            activeNotes[i] = activeNotes[activeNoteCount - 1];
-                            --activeNoteCount;
-                            break;
-                        }
-                    }
-                }
+                    refIndex = removeOldestActiveNote (static_cast<int> (data[1]), channel);
 
                 const ReferenceNote* refNote = (refIndex >= 0 && refIndex < static_cast<int> (reference->notes.size()))
                     ? &reference->notes[refIndex]
@@ -1012,11 +1043,14 @@ std::shared_ptr<PluginProcessor::ReferenceData> PluginProcessor::buildReferenceF
     }
 
     double derivedClusterWindowSeconds = 0.05;
+    double minDeltaSeconds = -1.0;
+    double medianDeltaSeconds = -1.0;
     if (! noteDeltas.empty())
     {
         std::sort (noteDeltas.begin(), noteDeltas.end());
-        const double medianDelta = noteDeltas[noteDeltas.size() / 2];
-        derivedClusterWindowSeconds = medianDelta * 0.4;
+        medianDeltaSeconds = noteDeltas[noteDeltas.size() / 2];
+        minDeltaSeconds = noteDeltas.front();
+        derivedClusterWindowSeconds = medianDeltaSeconds * 0.4;
     }
 
     const double appliedClusterWindowSeconds = (clusterWindowSeconds > 0.0)
@@ -1025,6 +1059,8 @@ std::shared_ptr<PluginProcessor::ReferenceData> PluginProcessor::buildReferenceF
 
     const double clampedClusterWindowSeconds = juce::jlimit (0.02, 1.0, appliedClusterWindowSeconds);
     reference->clusterWindowSeconds = clampedClusterWindowSeconds;
+    reference->minIoiSeconds = minDeltaSeconds;
+    reference->medianIoiSeconds = medianDeltaSeconds;
 
     reference->clusters.clear();
     reference->clusters.reserve (reference->notes.size());
@@ -1052,6 +1088,7 @@ std::shared_ptr<PluginProcessor::ReferenceData> PluginProcessor::buildReferenceF
         }
     }
     reference->clusters.push_back (cluster);
+    reference->clusterMatchedCounts.assign (reference->clusters.size(), 0);
 
     std::vector<ReferenceTempoEvent> tempoSeconds;
     tempoSeconds.reserve (static_cast<size_t> (tempoEventsShifted.getNumEvents()));
@@ -1162,15 +1199,76 @@ juce::AudioProcessorEditor* PluginProcessor::createEditor()
     return new PluginEditor (*this);
 }
 
+void PluginProcessor::advanceClusterCursor (ReferenceData& reference) noexcept
+{
+    const auto totalClusters = static_cast<int> (reference.clusters.size());
+    const auto matchedCountsSize = reference.clusterMatchedCounts.size();
+
+    while (referenceClusterCursor < totalClusters
+        && matchedCountsSize > static_cast<size_t> (referenceClusterCursor))
+    {
+        const auto& cluster = reference.clusters[static_cast<size_t> (referenceClusterCursor)];
+        const int matchedCount = reference.clusterMatchedCounts[static_cast<size_t> (referenceClusterCursor)];
+        if (matchedCount < cluster.noteCount)
+            break;
+
+        ++referenceClusterCursor;
+    }
+
+    if (referenceClusterCursor < totalClusters
+        && matchedCountsSize > static_cast<size_t> (referenceClusterCursor))
+    {
+        referenceClusterMatchedCount =
+            reference.clusterMatchedCounts[static_cast<size_t> (referenceClusterCursor)];
+    }
+    else
+    {
+        referenceClusterMatchedCount = 0;
+    }
+}
+
+int PluginProcessor::removeOldestActiveNote (int noteNumber, int channel) noexcept
+{
+    if (activeNoteCount <= 0)
+        return -1;
+
+    int matchIndex = -1;
+    uint64_t oldestOrder = 0;
+
+    for (int i = 0; i < activeNoteCount; ++i)
+    {
+        const auto& active = activeNotes[i];
+        if (active.noteNumber != noteNumber || active.channel != channel)
+            continue;
+
+        if (matchIndex < 0 || active.onOrder < oldestOrder)
+        {
+            matchIndex = i;
+            oldestOrder = active.onOrder;
+        }
+    }
+
+    if (matchIndex < 0)
+        return -1;
+
+    const int refIndex = activeNotes[matchIndex].refIndex;
+    activeNotes[matchIndex] = activeNotes[activeNoteCount - 1];
+    --activeNoteCount;
+    return refIndex;
+}
+
 int PluginProcessor::matchReferenceNoteInCluster (int noteNumber,
                                                   int channel,
-                                                  ReferenceData& reference) noexcept
+                                                  ReferenceData& reference,
+                                                  int maxLookaheadClusters) noexcept
 {
     const auto totalClusters = static_cast<int> (reference.clusters.size());
     if (referenceClusterCursor >= totalClusters)
         return -1;
 
     if (reference.matched.size() != reference.notes.size())
+        return -1;
+    if (reference.clusterMatchedCounts.size() != reference.clusters.size())
         return -1;
 
     auto findNoteIndexInCluster = [&](int clusterIndex) -> int
@@ -1197,41 +1295,16 @@ int PluginProcessor::matchReferenceNoteInCluster (int noteNumber,
         return -1;
     };
 
-    auto countMatchedInCluster = [&](int clusterIndex) -> int
-    {
-        if (clusterIndex < 0 || clusterIndex >= totalClusters)
-            return 0;
-
-        const auto& cluster = reference.clusters[static_cast<size_t> (clusterIndex)];
-        const int startIndex = cluster.startIndex;
-        const int endIndex = startIndex + cluster.noteCount;
-        int count = 0;
-
-        for (int i = startIndex; i < endIndex; ++i)
-        {
-            if (i < 0 || i >= static_cast<int> (reference.notes.size()))
-                continue;
-            if (reference.matched[static_cast<size_t> (i)] != 0)
-                ++count;
-        }
-
-        return count;
-    };
-
     auto applyMatchAtCluster = [&](int clusterIndex, int noteIndex) -> int
     {
         reference.matched[static_cast<size_t> (noteIndex)] = 1;
-        referenceClusterCursor = clusterIndex;
-        referenceClusterMatchedCount = countMatchedInCluster (clusterIndex);
+        const auto& cluster = reference.clusters[static_cast<size_t> (clusterIndex)];
+        auto& matchedCount = reference.clusterMatchedCounts[static_cast<size_t> (clusterIndex)];
+        if (matchedCount < cluster.noteCount)
+            ++matchedCount;
         clusterMissStreak = 0;
 
-        const auto& cluster = reference.clusters[static_cast<size_t> (clusterIndex)];
-        if (referenceClusterMatchedCount >= cluster.noteCount)
-        {
-            ++referenceClusterCursor;
-            referenceClusterMatchedCount = 0;
-            clusterMissStreak = 0;
-        }
+        advanceClusterCursor (reference);
 
         return noteIndex;
     };
@@ -1240,8 +1313,9 @@ int PluginProcessor::matchReferenceNoteInCluster (int noteNumber,
     if (directIndex >= 0)
         return applyMatchAtCluster (referenceClusterCursor, directIndex);
 
+    const int clampedLookahead = juce::jmax (0, maxLookaheadClusters);
     const int maxCluster = juce::jmin (totalClusters - 1,
-        referenceClusterCursor + kMaxClusterLookahead);
+        referenceClusterCursor + clampedLookahead);
     for (int clusterIndex = referenceClusterCursor + 1; clusterIndex <= maxCluster; ++clusterIndex)
     {
         const int lookaheadIndex = findNoteIndexInCluster (clusterIndex);
@@ -1262,7 +1336,13 @@ void PluginProcessor::handleClusterMiss (ReferenceData& reference) noexcept
     if (clusterMissStreak < kMaxClusterMissStreak)
         return;
 
-    if (referenceClusterCursor + 1 < totalClusters)
+    if (reference.clusterMatchedCounts.size() == reference.clusters.size())
+    {
+        const auto& cluster = reference.clusters[static_cast<size_t> (referenceClusterCursor)];
+        reference.clusterMatchedCounts[static_cast<size_t> (referenceClusterCursor)] = cluster.noteCount;
+        advanceClusterCursor (reference);
+    }
+    else if (referenceClusterCursor + 1 < totalClusters)
     {
         ++referenceClusterCursor;
         referenceClusterMatchedCount = 0;
@@ -1280,6 +1360,7 @@ void PluginProcessor::resetPlaybackState() noexcept
     referenceClusterMatchedCount = 0;
     clusterMissStreak = 0;
     referenceTempoIndex = 0;
+    noteOnOrderCounter = 0;
     playbackStartSample = 0;
     userStartSample = 0;
     userStartSampleCaptured = false;
@@ -1294,12 +1375,16 @@ void PluginProcessor::resetPlaybackState() noexcept
     {
         if (ref->matched.size() == ref->notes.size())
             std::fill (ref->matched.begin(), ref->matched.end(), 0);
+        if (ref->clusterMatchedCounts.size() == ref->clusters.size())
+            std::fill (ref->clusterMatchedCounts.begin(), ref->clusterMatchedCounts.end(), 0);
     }
 
     if (auto refShifted = std::atomic_load (&referenceDataShifted))
     {
         if (refShifted->matched.size() == refShifted->notes.size())
             std::fill (refShifted->matched.begin(), refShifted->matched.end(), 0);
+        if (refShifted->clusterMatchedCounts.size() == refShifted->clusters.size())
+            std::fill (refShifted->clusterMatchedCounts.begin(), refShifted->clusterMatchedCounts.end(), 0);
     }
 }
 

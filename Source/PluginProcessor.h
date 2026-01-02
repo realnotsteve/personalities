@@ -53,6 +53,8 @@ public:
     float getCpuLoadPercent() const noexcept;
     float getHostBpm() const noexcept;
     float getReferenceBpm() const noexcept;
+    float getReferenceIoiMinMs() const noexcept;
+    float getReferenceIoiMedianMs() const noexcept;
     float getClusterWindowMs() const noexcept;
     float getStartOffsetMs() const noexcept;
     float getStartOffsetBars() const noexcept;
@@ -99,11 +101,14 @@ private:
         std::vector<ReferenceNote> notes;
         std::vector<uint8_t> matched;
         std::vector<ReferenceCluster> clusters;
+        std::vector<int> clusterMatchedCounts;
         std::vector<ReferenceTempoEvent> tempoEvents;
         int timeSigNumerator = 4;
         int timeSigDenominator = 4;
         double barDurationSeconds = 0.0;
         double clusterWindowSeconds = 0.0;
+        double minIoiSeconds = -1.0;
+        double medianIoiSeconds = -1.0;
         double sampleRate = 0.0;
         bool sampleTimesValid = false;
         uint64_t firstNoteSample = 0;
@@ -115,6 +120,7 @@ private:
         int noteNumber = 0;
         int channel = 1;
         int refIndex = -1;
+        uint64_t onOrder = 0;
     };
 
     struct ScheduledMidiEvent
@@ -151,10 +157,13 @@ private:
     static constexpr float kVelocityEmaAlpha = 0.05f;
 
     void insertScheduledEvent (const ScheduledMidiEvent& event) noexcept;
+    int removeOldestActiveNote (int noteNumber, int channel) noexcept;
     int matchReferenceNoteInCluster (int noteNumber,
                                      int channel,
-                                     ReferenceData& reference) noexcept;
+                                     ReferenceData& reference,
+                                     int maxLookaheadClusters) noexcept;
     void handleClusterMiss (ReferenceData& reference) noexcept;
+    void advanceClusterCursor (ReferenceData& reference) noexcept;
     void resetPlaybackState() noexcept;
     void updateReferenceSampleTimes (ReferenceData& data, double sampleRate);
     std::shared_ptr<ReferenceData> buildReferenceFromFile (const juce::File& file,
@@ -206,6 +215,7 @@ private:
     int referenceClusterMatchedCount = 0;
     int clusterMissStreak = 0;
     int referenceTempoIndex = 0;
+    uint64_t noteOnOrderCounter = 0;
     float userVelocityEma = 64.0f;
     float referenceVelocityEma = 64.0f;
     bool userVelocityEmaValid = false;

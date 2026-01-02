@@ -52,6 +52,8 @@ private:
     juce::Label cpuValueLabel;
     juce::Label bpmLabel;
     juce::Label bpmValueLabel;
+    juce::Label refIoiLabel;
+    juce::Label refIoiValueLabel;
     juce::Label startOffsetLabel;
     juce::Label startOffsetValueLabel;
     juce::TextButton resetStartOffsetButton;
@@ -80,6 +82,8 @@ private:
     float lastCpuPercent = 0.0f;
     float lastHostBpm = -1.0f;
     float lastReferenceBpm = -1.0f;
+    float lastRefIoiMinMs = -1.0f;
+    float lastRefIoiMedianMs = -1.0f;
     float lastStartOffsetMs = 0.0f;
     float lastStartOffsetBars = 0.0f;
     bool lastStartOffsetValid = false;

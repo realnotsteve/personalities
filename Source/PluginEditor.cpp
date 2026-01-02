@@ -201,6 +201,15 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     bpmValueLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (bpmValueLabel);
 
+    refIoiLabel.setText ("Ref IOI (min/med ms)", juce::dontSendNotification);
+    refIoiLabel.setJustificationType (juce::Justification::centredLeft);
+    addAndMakeVisible (refIoiLabel);
+
+    refIoiValueLabel.setText ("-- / --", juce::dontSendNotification);
+    refIoiValueLabel.setJustificationType (juce::Justification::centredLeft);
+    refIoiValueLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (refIoiValueLabel);
+
     startOffsetLabel.setText ("Start Offset", juce::dontSendNotification);
     startOffsetLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (startOffsetLabel);
@@ -362,6 +371,15 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     bpmValueLabel.setText (formatBpm (lastHostBpm) + " / " + formatBpm (lastReferenceBpm),
         juce::dontSendNotification);
 
+    lastRefIoiMinMs = processor.getReferenceIoiMinMs();
+    lastRefIoiMedianMs = processor.getReferenceIoiMedianMs();
+    auto formatIoi = [] (float value)
+    {
+        return (value > 0.0f) ? juce::String (value, 1) : juce::String ("--");
+    };
+    refIoiValueLabel.setText (formatIoi (lastRefIoiMinMs) + " / " + formatIoi (lastRefIoiMedianMs),
+        juce::dontSendNotification);
+
     lastStartOffsetValid = processor.hasStartOffset();
     if (lastStartOffsetValid)
     {
@@ -449,6 +467,10 @@ void PluginEditor::resized()
     auto bpmRow = statusArea.removeFromTop (24);
     bpmLabel.setBounds (bpmRow.removeFromLeft (90));
     bpmValueLabel.setBounds (bpmRow);
+
+    auto refIoiRow = statusArea.removeFromTop (24);
+    refIoiLabel.setBounds (refIoiRow.removeFromLeft (130));
+    refIoiValueLabel.setBounds (refIoiRow);
 
     auto startOffsetRow = statusArea.removeFromTop (24);
     startOffsetLabel.setBounds (startOffsetRow.removeFromLeft (90));
@@ -551,6 +573,21 @@ void PluginEditor::timerCallback()
             return (bpm > 0.0f) ? juce::String (bpm, 2) : juce::String ("--");
         };
         bpmValueLabel.setText (formatBpm (hostBpm) + " / " + formatBpm (refBpm),
+            juce::dontSendNotification);
+    }
+
+    const float refIoiMinMs = processor.getReferenceIoiMinMs();
+    const float refIoiMedianMs = processor.getReferenceIoiMedianMs();
+    if (std::abs (refIoiMinMs - lastRefIoiMinMs) > 0.01f
+        || std::abs (refIoiMedianMs - lastRefIoiMedianMs) > 0.01f)
+    {
+        lastRefIoiMinMs = refIoiMinMs;
+        lastRefIoiMedianMs = refIoiMedianMs;
+        auto formatIoi = [] (float value)
+        {
+            return (value > 0.0f) ? juce::String (value, 1) : juce::String ("--");
+        };
+        refIoiValueLabel.setText (formatIoi (refIoiMinMs) + " / " + formatIoi (refIoiMedianMs),
             juce::dontSendNotification);
     }
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.14 (2026-01-02)
+
+- **Summary:** PERSONALITIES (PRISM): Update CMakeLists.txt, Source
+- **Files:**
+  - `CMakeLists.txt`
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `Source/PluginProcessor.cpp`
+  - `Source/PluginProcessor.h`
+
 ## v0.0.13 (2026-01-02)
 
 - **Summary:** PERSONALITIES (PRISM): Update Source
