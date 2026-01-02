@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.0.13 (2026-01-02)
+
+- **Summary:** PERSONALITIES (PRISM): Update Source
+- **Files:**
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `Source/PluginProcessor.cpp`
+  - `Source/PluginProcessor.h`
+
 ## v0.0.12 (2026-01-01)
 
 - **Summary:** PERSONALITIES (PRISM): Update Source

@@ -5,11 +5,12 @@
 namespace
 {
     constexpr const char* kParamDelayMs = "delay_ms";
-    constexpr const char* kParamMatchWindowMs = "match_window_ms";
+    constexpr const char* kParamClusterWindowMs = "match_window_ms";
     constexpr const char* kParamCorrection = "correction";
     constexpr const char* kParamMute = "mute";
     constexpr const char* kParamBypass = "bypass";
     constexpr const char* kParamVelocityCorrection = "velocity_correction";
+    constexpr const char* kParamTempoShiftBackBar = "tempo_shift_back_bar";
 }
 
 void PluginEditor::PulseIndicator::paint (juce::Graphics& g)
@@ -126,16 +127,14 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     slackSlider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 20);
     addAndMakeVisible (slackSlider);
 
-    matchWindowLabel.setText ("Match Window (ms)", juce::dontSendNotification);
-    matchWindowLabel.setJustificationType (juce::Justification::centred);
-    addAndMakeVisible (matchWindowLabel);
+    clusterWindowLabel.setText ("Cluster Window (ms)", juce::dontSendNotification);
+    clusterWindowLabel.setJustificationType (juce::Justification::centred);
+    addAndMakeVisible (clusterWindowLabel);
 
-    matchWindowSlider.setSliderStyle (juce::Slider::LinearHorizontal);
-    matchWindowSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 70, 20);
-    addAndMakeVisible (matchWindowSlider);
-
-    autoButton.setButtonText ("Auto");
-    addAndMakeVisible (autoButton);
+    clusterWindowSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    clusterWindowSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 70, 20);
+    clusterWindowSlider.setRange (20.0, 1000.0, 1.0);
+    addAndMakeVisible (clusterWindowSlider);
 
     correctionLabel.setText ("Correction", juce::dontSendNotification);
     correctionLabel.setJustificationType (juce::Justification::centred);
@@ -202,8 +201,24 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     bpmValueLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (bpmValueLabel);
 
+    startOffsetLabel.setText ("Start Offset", juce::dontSendNotification);
+    startOffsetLabel.setJustificationType (juce::Justification::centredLeft);
+    addAndMakeVisible (startOffsetLabel);
+
+    startOffsetValueLabel.setText ("Not captured", juce::dontSendNotification);
+    startOffsetValueLabel.setJustificationType (juce::Justification::centredLeft);
+    startOffsetValueLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (startOffsetValueLabel);
+
+    resetStartOffsetButton.setButtonText ("Reset Start Offset");
+    addAndMakeVisible (resetStartOffsetButton);
+
     copyLogButton.setButtonText ("Copy Miss Log");
     addAndMakeVisible (copyLogButton);
+
+    tempoShiftButton.setButtonText ("Tempo -1 Bar");
+    tempoShiftButton.setClickingTogglesState (true);
+    addAndMakeVisible (tempoShiftButton);
 
     velocityButton.setButtonText ("Vel Corr");
     velocityButton.setClickingTogglesState (true);
@@ -219,8 +234,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     slackAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         processor.apvts, kParamDelayMs, slackSlider);
-    matchWindowAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        processor.apvts, kParamMatchWindowMs, matchWindowSlider);
+    clusterWindowAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        processor.apvts, kParamClusterWindowMs, clusterWindowSlider);
     correctionAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         processor.apvts, kParamCorrection, correctionSlider);
     velocityAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -229,26 +244,61 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         processor.apvts, kParamMute, muteButton);
     bypassAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor.apvts, kParamBypass, bypassButton);
+    tempoShiftAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        processor.apvts, kParamTempoShiftBackBar, tempoShiftButton);
 
-    autoButton.onClick = [this]
+    auto applyClusterWindow = [this]
     {
-        float matchWindowMs = 0.0f;
-        float slackMs = 0.0f;
-        if (processor.computeAutoMatchSettings (matchWindowMs, slackMs))
+        if (processor.isTransportPlaying())
         {
-            processor.applyAutoMatchSettings (matchWindowMs, slackMs);
-            referenceStatusLabel.setText ("Auto set: Slack "
-                    + juce::String (slackMs, 0)
-                    + " ms, Window "
-                    + juce::String (matchWindowMs, 0)
-                    + " ms",
+            referenceStatusLabel.setText ("Stop transport to update cluster window.",
+                juce::dontSendNotification);
+            return;
+        }
+
+        if (processor.getReferencePath().isEmpty())
+        {
+            referenceStatusLabel.setText ("Load a personality to update cluster window.",
+                juce::dontSendNotification);
+            return;
+        }
+
+        juce::String errorMessage;
+        if (processor.rebuildReferenceClusters (static_cast<float> (clusterWindowSlider.getValue()), errorMessage))
+        {
+            referenceStatusLabel.setText ("Cluster window updated.",
                 juce::dontSendNotification);
         }
         else
         {
-            referenceStatusLabel.setText ("Auto failed: load a personality.",
+            referenceStatusLabel.setText ("Cluster update failed: " + errorMessage,
                 juce::dontSendNotification);
         }
+    };
+
+    clusterWindowSlider.onDragEnd = applyClusterWindow;
+    clusterWindowSlider.onValueChange = [this, applyClusterWindow]
+    {
+        if (! clusterWindowSlider.isMouseButtonDown())
+            applyClusterWindow();
+    };
+
+    resetStartOffsetButton.onClick = [this]
+    {
+        if (processor.isTransportPlaying())
+        {
+            referenceStatusLabel.setText ("Stop transport to reset start offset.",
+                juce::dontSendNotification);
+            return;
+        }
+
+        processor.requestStartOffsetReset();
+        lastStartOffsetValid = false;
+        lastStartOffsetMs = 0.0f;
+        lastStartOffsetBars = 0.0f;
+        startOffsetValueLabel.setText ("Not captured", juce::dontSendNotification);
+        referenceStatusLabel.setText ("Start offset reset.",
+            juce::dontSendNotification);
     };
 
     copyLogButton.onClick = [this]
@@ -312,11 +362,24 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     bpmValueLabel.setText (formatBpm (lastHostBpm) + " / " + formatBpm (lastReferenceBpm),
         juce::dontSendNotification);
 
+    lastStartOffsetValid = processor.hasStartOffset();
+    if (lastStartOffsetValid)
+    {
+        lastStartOffsetMs = processor.getStartOffsetMs();
+        lastStartOffsetBars = processor.getStartOffsetBars();
+        const juce::String signPrefix = (lastStartOffsetBars >= 0.0f) ? "+" : "";
+        startOffsetValueLabel.setText (signPrefix + juce::String (lastStartOffsetBars, 2)
+                + " bars (" + juce::String (lastStartOffsetMs, 0) + " ms)",
+            juce::dontSendNotification);
+    }
+
+    resetStartOffsetButton.setEnabled (! lastTransportPlaying);
     copyLogButton.setEnabled (! lastTransportPlaying);
+    clusterWindowSlider.setEnabled (! lastTransportPlaying);
 
     startTimerHz (30);
 
-    setSize (670, 420);
+    setSize (670, 530);
 }
 
 void PluginEditor::paint (juce::Graphics& g)
@@ -355,11 +418,9 @@ void PluginEditor::resized()
     correctionSlider.setBounds (correctionArea.reduced (10));
 
     controlsArea.removeFromTop (6);
-    auto matchArea = controlsArea.removeFromTop (50);
-    auto matchLabelRow = matchArea.removeFromTop (18);
-    autoButton.setBounds (matchLabelRow.removeFromRight (60));
-    matchWindowLabel.setBounds (matchLabelRow);
-    matchWindowSlider.setBounds (matchArea);
+    auto clusterArea = controlsArea.removeFromTop (50);
+    clusterWindowLabel.setBounds (clusterArea.removeFromTop (18));
+    clusterWindowSlider.setBounds (clusterArea);
 
     auto transportArea = statusArea.removeFromTop (24);
     transportLabel.setBounds (transportArea.removeFromLeft (90));
@@ -389,8 +450,18 @@ void PluginEditor::resized()
     bpmLabel.setBounds (bpmRow.removeFromLeft (90));
     bpmValueLabel.setBounds (bpmRow);
 
+    auto startOffsetRow = statusArea.removeFromTop (24);
+    startOffsetLabel.setBounds (startOffsetRow.removeFromLeft (90));
+    startOffsetValueLabel.setBounds (startOffsetRow);
+
+    auto resetOffsetRow = statusArea.removeFromTop (24);
+    resetStartOffsetButton.setBounds (resetOffsetRow);
+
     auto copyRow = statusArea.removeFromTop (26);
     copyLogButton.setBounds (copyRow);
+
+    auto tempoShiftRow = statusArea.removeFromTop (24);
+    tempoShiftButton.setBounds (tempoShiftRow);
 
     statusArea.removeFromTop (4);
     velocityButton.setBounds (statusArea.removeFromTop (24));
@@ -442,7 +513,9 @@ void PluginEditor::timerCallback()
         transportValueLabel.setText (isPlaying ? "Playing" : "Stopped", juce::dontSendNotification);
         transportValueLabel.setColour (juce::Label::textColourId,
             isPlaying ? juce::Colours::lightgreen : juce::Colours::lightgrey);
+        resetStartOffsetButton.setEnabled (! isPlaying);
         copyLogButton.setEnabled (! isPlaying);
+        clusterWindowSlider.setEnabled (! isPlaying);
     }
 
     const auto matched = processor.getMatchedNoteOnCounter();
@@ -479,5 +552,32 @@ void PluginEditor::timerCallback()
         };
         bpmValueLabel.setText (formatBpm (hostBpm) + " / " + formatBpm (refBpm),
             juce::dontSendNotification);
+    }
+
+    const bool hasStartOffset = processor.hasStartOffset();
+    if (! hasStartOffset)
+    {
+        if (lastStartOffsetValid)
+        {
+            lastStartOffsetValid = false;
+            startOffsetValueLabel.setText ("Not captured", juce::dontSendNotification);
+        }
+    }
+    else
+    {
+        const float offsetMs = processor.getStartOffsetMs();
+        const float offsetBars = processor.getStartOffsetBars();
+        if (! lastStartOffsetValid
+            || std::abs (offsetMs - lastStartOffsetMs) > 0.5f
+            || std::abs (offsetBars - lastStartOffsetBars) > 0.01f)
+        {
+            lastStartOffsetValid = true;
+            lastStartOffsetMs = offsetMs;
+            lastStartOffsetBars = offsetBars;
+            const juce::String signPrefix = (offsetBars >= 0.0f) ? "+" : "";
+            startOffsetValueLabel.setText (signPrefix + juce::String (offsetBars, 2)
+                    + " bars (" + juce::String (offsetMs, 0) + " ms)",
+                juce::dontSendNotification);
+        }
     }
 }
