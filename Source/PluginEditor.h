@@ -33,10 +33,22 @@ private:
         void setValues (float noteOnDeltaMs, float noteOffDeltaMs, float velocityDelta, float slackMs);
 
     private:
+        struct TrailPoint
+        {
+            float x = 0.0f;
+            float y = 0.0f;
+            float z = 0.0f;
+            float magnitude = 0.0f;
+        };
+
+        static constexpr int kTrailLength = 28;
         float smoothedOn = 0.0f;
         float smoothedOff = 0.0f;
         float smoothedVel = 0.0f;
         float smoothedMagnitude = 0.0f;
+        std::array<TrailPoint, kTrailLength> trail {};
+        int trailHead = 0;
+        int trailCount = 0;
     };
 
     void timerCallback() override;

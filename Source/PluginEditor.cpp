@@ -45,24 +45,39 @@ void PluginEditor::CorrectionDisplay::paint (juce::Graphics& g)
     const float width = bounds.getWidth();
     const float height = bounds.getHeight();
     const float scale = juce::jmin (width, height) * 0.38f;
+    const float corner = 14.0f;
 
-    const auto shadowBounds = bounds.translated (0.0f, 4.0f);
-    g.setColour (juce::Colours::black.withAlpha (0.35f));
-    g.fillRoundedRectangle (shadowBounds, 12.0f);
+    const auto shadowBounds = bounds.translated (0.0f, 6.0f);
+    g.setColour (juce::Colours::black.withAlpha (0.28f));
+    g.fillRoundedRectangle (shadowBounds, corner);
 
-    juce::ColourGradient panelGrad (juce::Colour (0x1a1f28),
+    juce::ColourGradient glassGrad (juce::Colour (0x283447).withAlpha (0.9f),
         bounds.getTopLeft(),
-        juce::Colour (0x0a0c12),
+        juce::Colour (0x0b0f18).withAlpha (0.95f),
         bounds.getBottomRight(), false);
-    g.setGradientFill (panelGrad);
-    g.fillRoundedRectangle (bounds, 12.0f);
+    g.setGradientFill (glassGrad);
+    g.fillRoundedRectangle (bounds, corner);
 
-    g.setColour (juce::Colours::white.withAlpha (0.06f));
-    g.drawRoundedRectangle (bounds, 12.0f, 1.0f);
+    auto innerBounds = bounds.reduced (2.0f);
+    juce::ColourGradient innerGrad (juce::Colours::white.withAlpha (0.18f),
+        innerBounds.getTopLeft(),
+        juce::Colours::transparentBlack,
+        innerBounds.getCentre(), false);
+    g.setGradientFill (innerGrad);
+    g.fillRoundedRectangle (innerBounds, corner - 2.0f);
 
-    const juce::Point<float> origin (center.x, center.y + scale * 0.25f);
-    const juce::Point<float> axisX (scale * 0.75f, scale * 0.38f);
-    const juce::Point<float> axisY (-scale * 0.75f, scale * 0.38f);
+    auto highlightBand = bounds.withHeight (bounds.getHeight() * 0.35f).reduced (8.0f, 6.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.12f));
+    g.fillRoundedRectangle (highlightBand, corner - 6.0f);
+
+    g.setColour (juce::Colours::white.withAlpha (0.2f));
+    g.drawRoundedRectangle (bounds, corner, 1.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.08f));
+    g.drawRoundedRectangle (bounds.reduced (4.0f), corner - 4.0f, 1.0f);
+
+    const juce::Point<float> origin (center.x, center.y + scale * 0.28f);
+    const juce::Point<float> axisX (scale * 0.75f, scale * 0.36f);
+    const juce::Point<float> axisY (-scale * 0.75f, scale * 0.36f);
     const juce::Point<float> axisZ (0.0f, -scale * 0.9f);
 
     const juce::Point<float> baseA = origin;
@@ -81,29 +96,13 @@ void PluginEditor::CorrectionDisplay::paint (juce::Graphics& g)
     basePlane.lineTo (baseC);
     basePlane.lineTo (baseD);
     basePlane.closeSubPath();
-    g.setColour (juce::Colour (0x0d1016).withAlpha (0.85f));
+    g.setColour (juce::Colour (0x0c1016).withAlpha (0.7f));
     g.fillPath (basePlane);
 
-    juce::Path topPlane;
-    topPlane.startNewSubPath (topA);
-    topPlane.lineTo (topB);
-    topPlane.lineTo (topC);
-    topPlane.lineTo (topD);
-    topPlane.closeSubPath();
-    g.setColour (juce::Colours::white.withAlpha (0.04f));
-    g.fillPath (topPlane);
-
     g.setColour (juce::Colours::white.withAlpha (0.12f));
-    g.drawLine (baseA.x, baseA.y, topA.x, topA.y, 1.0f);
-    g.drawLine (baseB.x, baseB.y, topB.x, topB.y, 1.0f);
-    g.drawLine (baseC.x, baseC.y, topC.x, topC.y, 1.0f);
-    g.drawLine (baseD.x, baseD.y, topD.x, topD.y, 1.0f);
+    g.strokePath (basePlane, juce::PathStrokeType (1.0f));
 
-    g.setColour (juce::Colours::white.withAlpha (0.2f));
-    g.strokePath (basePlane, juce::PathStrokeType (1.1f));
-    g.strokePath (topPlane, juce::PathStrokeType (1.0f));
-
-    g.setColour (juce::Colours::white.withAlpha (0.12f));
+    g.setColour (juce::Colours::white.withAlpha (0.08f));
     for (int i = 1; i <= 4; ++i)
     {
         const float t = static_cast<float> (i) / 5.0f;
@@ -118,50 +117,93 @@ void PluginEditor::CorrectionDisplay::paint (juce::Graphics& g)
 
     auto drawAxis = [&g](juce::Point<float> start, juce::Point<float> end, juce::Colour colour)
     {
-        g.setColour (colour.withAlpha (0.3f));
+        g.setColour (colour.withAlpha (0.25f));
         g.drawLine (start.x, start.y, end.x, end.y, 4.0f);
-        g.setColour (colour.withAlpha (0.9f));
+        g.setColour (colour.withAlpha (0.8f));
         g.drawLine (start.x, start.y, end.x, end.y, 2.0f);
     };
 
-    drawAxis (baseA, baseB, juce::Colour (0x4cc3ff));
-    drawAxis (baseA, baseD, juce::Colour (0xff5f8f));
-    drawAxis (baseA, topA, juce::Colour (0x9cf25f));
+    drawAxis (baseA, baseB, juce::Colour (0x5cd5ff));
+    drawAxis (baseA, baseD, juce::Colour (0xff7bb0));
+    drawAxis (baseA, topA, juce::Colour (0xa8ff7b));
 
-    const float x = smoothedOn;
-    const float y = smoothedOff;
-    const float z = smoothedVel;
-    const juce::Point<float> position = origin + axisX * x + axisY * y + axisZ * z;
-    const juce::Point<float> shadowPos = origin + axisX * x + axisY * y;
+    auto toScreen = [&](const TrailPoint& point)
+    {
+        return origin + axisX * point.x + axisY * point.y + axisZ * point.z;
+    };
+
+    if (trailCount > 1)
+    {
+        for (int i = 1; i < trailCount; ++i)
+        {
+            const int index0 = (trailHead - trailCount + i - 1 + kTrailLength) % kTrailLength;
+            const int index1 = (trailHead - trailCount + i + kTrailLength) % kTrailLength;
+            const auto& pointA = trail[static_cast<size_t> (index0)];
+            const auto& pointB = trail[static_cast<size_t> (index1)];
+            const auto posA = toScreen (pointA);
+            const auto posB = toScreen (pointB);
+            const float age = static_cast<float> (i) / static_cast<float> (trailCount - 1);
+            const float hue = juce::jmap (0.5f * (pointA.magnitude + pointB.magnitude), 0.62f, 0.06f);
+            const float glowWidth = 5.0f + 7.0f * age;
+            const float coreWidth = 1.5f + 3.5f * age;
+            const juce::Colour glowColour = juce::Colour::fromHSV (hue, 0.4f, 1.0f, 0.06f + 0.18f * age);
+            const juce::Colour coreColour = juce::Colour::fromHSV (hue, 0.75f, 1.0f, 0.12f + 0.5f * age);
+            g.setColour (glowColour);
+            g.drawLine (posA.x, posA.y, posB.x, posB.y, glowWidth);
+            g.setColour (coreColour);
+            g.drawLine (posA.x, posA.y, posB.x, posB.y, coreWidth);
+        }
+    }
+
+    for (int i = 0; i < trailCount; ++i)
+    {
+        const int index = (trailHead - trailCount + i + kTrailLength) % kTrailLength;
+        const auto& point = trail[static_cast<size_t> (index)];
+        const auto pos = toScreen (point);
+        const float age = static_cast<float> (i + 1) / static_cast<float> (trailCount);
+        const float alpha = 0.06f + 0.38f * age;
+        const float hue = juce::jmap (point.magnitude, 0.62f, 0.06f);
+        const juce::Colour trailColour = juce::Colour::fromHSV (hue, 0.6f, 1.0f, alpha);
+        const float radius = 3.0f + age * 7.5f;
+        g.setColour (trailColour);
+        g.fillEllipse (pos.x - radius, pos.y - radius, radius * 2.0f, radius * 2.0f);
+    }
 
     const float magnitude = juce::jlimit (0.0f, 1.0f, smoothedMagnitude);
     const float hue = juce::jmap (magnitude, 0.62f, 0.06f);
     const juce::Colour glowColour = juce::Colour::fromHSV (hue, 0.9f, 1.0f, 0.95f);
+    const juce::Point<float> position = origin + axisX * smoothedOn + axisY * smoothedOff + axisZ * smoothedVel;
+    const juce::Point<float> shadowPos = origin + axisX * smoothedOn + axisY * smoothedOff;
 
-    const float shadowRadius = 10.0f + magnitude * 12.0f;
-    g.setColour (juce::Colours::black.withAlpha (0.4f));
+    const float shadowRadius = 12.0f + magnitude * 14.0f;
+    g.setColour (juce::Colours::black.withAlpha (0.35f));
     g.fillEllipse (shadowPos.x - shadowRadius * 1.2f, shadowPos.y - shadowRadius * 0.6f,
         shadowRadius * 2.4f, shadowRadius * 1.2f);
 
-    g.setColour (juce::Colours::white.withAlpha (0.12f));
-    g.drawLine (shadowPos.x, shadowPos.y, position.x, position.y, 1.0f);
+    g.setColour (glowColour.withAlpha (0.25f));
+    g.fillEllipse (position.x - shadowRadius, position.y - shadowRadius,
+        shadowRadius * 2.0f, shadowRadius * 2.0f);
 
-    const float orbRadius = 10.0f + magnitude * 12.0f;
+    const float orbRadius = 12.0f + magnitude * 14.0f;
     juce::ColourGradient orbGrad (glowColour,
         { position.x - orbRadius * 0.4f, position.y - orbRadius * 0.5f },
-        juce::Colours::black.withAlpha (0.0f),
+        juce::Colours::transparentBlack,
         { position.x + orbRadius, position.y + orbRadius }, true);
     g.setGradientFill (orbGrad);
     g.fillEllipse (position.x - orbRadius, position.y - orbRadius,
         orbRadius * 2.0f, orbRadius * 2.0f);
 
-    g.setColour (juce::Colours::white.withAlpha (0.3f));
+    juce::ColourGradient glassHighlight (juce::Colours::white.withAlpha (0.7f),
+        { position.x - orbRadius * 0.5f, position.y - orbRadius * 0.6f },
+        juce::Colours::transparentWhite,
+        { position.x + orbRadius * 0.2f, position.y + orbRadius * 0.2f }, true);
+    g.setGradientFill (glassHighlight);
+    g.fillEllipse (position.x - orbRadius * 0.6f, position.y - orbRadius * 0.6f,
+        orbRadius * 1.2f, orbRadius * 1.2f);
+
+    g.setColour (juce::Colours::white.withAlpha (0.35f));
     g.drawEllipse (position.x - orbRadius, position.y - orbRadius,
         orbRadius * 2.0f, orbRadius * 2.0f, 1.0f);
-
-    g.setColour (juce::Colours::white.withAlpha (0.25f));
-    g.fillEllipse (position.x - orbRadius * 0.35f, position.y - orbRadius * 0.45f,
-        orbRadius * 0.6f, orbRadius * 0.6f);
 }
 
 void PluginEditor::CorrectionDisplay::setValues (float noteOnDeltaMs,
@@ -180,6 +222,11 @@ void PluginEditor::CorrectionDisplay::setValues (float noteOnDeltaMs,
     const float targetMag = std::sqrt (smoothedOn * smoothedOn
         + smoothedOff * smoothedOff + smoothedVel * smoothedVel);
     smoothedMagnitude += 0.2f * (targetMag - smoothedMagnitude);
+
+    trail[trailHead] = { smoothedOn, smoothedOff, smoothedVel, smoothedMagnitude };
+    trailHead = (trailHead + 1) % kTrailLength;
+    if (trailCount < kTrailLength)
+        ++trailCount;
 
     repaint();
 }
