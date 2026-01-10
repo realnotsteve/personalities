@@ -16,6 +16,12 @@ option(PERSONALITIES_BUILD_NOTEFX "Build the Note FX variant" OFF)
 
 add_subdirectory(JUCE)
 
+juce_add_binary_data(PersonalitiesAssets
+    SOURCES
+        assets/master_ui-open.png
+        assets/master_ui-closed.png
+)
+
 set(PERSONALITIES_BUILD_INFO_DIR "${CMAKE_BINARY_DIR}/generated")
 set(PERSONALITIES_BUILD_INFO_HEADER "${PERSONALITIES_BUILD_INFO_DIR}/PersonalitiesBuildInfo.h")
 set(PERSONALITIES_BUILD_NUMBER_FILE "${PERSONALITIES_BUILD_INFO_DIR}/build_number.txt")
@@ -79,11 +85,13 @@ endif()
 target_link_libraries(Personalities PRIVATE
     juce::juce_audio_utils
     juce::juce_gui_extra
+    PersonalitiesAssets
 )
 if(PERSONALITIES_BUILD_NOTEFX)
     target_link_libraries(Personalities_NoteFX PRIVATE
         juce::juce_audio_utils
         juce::juce_gui_extra
+        PersonalitiesAssets
     )
 endif()
 

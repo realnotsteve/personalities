@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.19 (2026-01-10)
+
+- **Summary:** PERSONALITIES (PRISM): Update 3 areas (e.g., CMakeLists.txt)
+- **Files:**
+  - `CMakeLists.txt`
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `assets/master_ui-closed.png`
+  - `assets/master_ui-open.png`
+
 ## v0.0.18 (2026-01-10)
 
 - **Summary:** PERSONALITIES (PRISM): Update CMakeLists.txt, devnotes.json

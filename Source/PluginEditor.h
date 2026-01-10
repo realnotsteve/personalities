@@ -31,6 +31,7 @@ private:
     public:
         void paint (juce::Graphics&) override;
         void setValues (float noteOnDeltaMs, float noteOffDeltaMs, float velocityDelta, float slackMs);
+        void setMinimalStyle (bool shouldBeMinimal) { minimalStyle = shouldBeMinimal; repaint(); }
 
     private:
         struct TrailPoint
@@ -49,13 +50,27 @@ private:
         std::array<TrailPoint, kTrailLength> trail {};
         int trailHead = 0;
         int trailCount = 0;
+        bool minimalStyle = false;
+    };
+
+    class ExpandButton final : public juce::Button
+    {
+    public:
+        ExpandButton();
+        void setExpanded (bool shouldBeExpanded);
+
+    private:
+        void paintButton (juce::Graphics&, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
+        bool isExpanded = false;
     };
 
     void timerCallback() override;
+    void updateUiVisibility();
 
     PluginProcessor& processor;
 
     juce::ComboBox referenceBox;
+    juce::ComboBox modeBox;
     juce::Label referenceLabel;
     juce::Label referenceStatusLabel;
     PulseIndicator referenceLoadedIndicator;
@@ -97,8 +112,13 @@ private:
     juce::TextButton copyLogButton;
     juce::ToggleButton tempoShiftButton;
     juce::ToggleButton velocityButton;
-    juce::ToggleButton muteButton;
-    juce::ToggleButton bypassButton;
+    juce::TextButton muteButton;
+    juce::TextButton bypassButton;
+    ExpandButton expandButton;
+
+    juce::Image backgroundOpen;
+    juce::Image backgroundClosed;
+    bool isExpanded = false;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> slackAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> clusterWindowAttachment;
