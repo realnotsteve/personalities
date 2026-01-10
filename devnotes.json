@@ -4,13 +4,12 @@
     "alias": "Personalities",
     "author": "William Evans, PhD",
     "description": "JUCE/C++ plugin for Studio One (macOS). Loads a reference MIDI performance, then interpolates user note timing/velocity toward the reference using a fixed Slack buffer and a Correction control.",
-    "version": "0.0.16",
+    "version": "0.0.18",
     "repo_folder": "personalities",
     "slug": "personalities",
     "host_target": "Studio One (macOS)",
     "formats": [
-      "VST3",
-      "VST3 (Note FX)"
+      "VST3"
     ],
     "framework": "JUCE 8",
     "build_system": "CMake",
@@ -38,7 +37,8 @@
   "workflows": {
     "versioning": {
       "description": "Default bump is patch. Use PRISM_BUMP=minor|patch to control bump type per commit. Pre-commit updates devnotes.json only; CMakeLists.txt version is manual.",
-      "source_of_truth": "devnotes.json meta.version (CMakeLists.txt version is not auto-updated)",
+      "source_of_truth": "devnotes.json meta.version (keep CMakeLists.txt in sync manually)",
+      "build_number": "Auto-incremented on each build via cmake/UpdateBuildInfo.cmake (version string = major.minor.patch.build).",
       "default_bump": "patch",
       "rules": {
         "patch": "X.Y.(Z+1)",
@@ -82,7 +82,7 @@
     "notes": [
       "Prefer VST3 first for Studio One reliability; AU optional later.",
       "Keep builds incremental; test often in Studio One.",
-      "Note FX build target: Personalities_NoteFX (MIDI effect for routing into instruments)."
+      "Optional Note FX build target (PERSONALITIES_BUILD_NOTEFX=ON): Personalities_NoteFX (MIDI effect for routing into instruments)."
     ]
   },
   "plugin_contract": {
@@ -112,6 +112,17 @@
         "automation": "optional"
       },
       {
+        "id": "match_window_ms",
+        "name": "Cluster Window (ms)",
+        "range": {
+          "min": 20.0,
+          "max": 1000.0
+        },
+        "default": 60.0,
+        "units": "ms",
+        "automation": "optional"
+      },
+      {
         "id": "correction",
         "name": "Correction",
         "range": {
@@ -121,11 +132,55 @@
         "default": 0.0,
         "units": "ratio",
         "automation": "optional"
+      },
+      {
+        "id": "velocity_correction",
+        "name": "Velocity Correction",
+        "range": {
+          "min": 0.0,
+          "max": 1.0
+        },
+        "default": 1.0,
+        "units": "bool",
+        "automation": "optional"
+      },
+      {
+        "id": "mute",
+        "name": "Mute",
+        "range": {
+          "min": 0.0,
+          "max": 1.0
+        },
+        "default": 0.0,
+        "units": "bool",
+        "automation": "optional"
+      },
+      {
+        "id": "bypass",
+        "name": "Bypass",
+        "range": {
+          "min": 0.0,
+          "max": 1.0
+        },
+        "default": 0.0,
+        "units": "bool",
+        "automation": "optional"
+      },
+      {
+        "id": "tempo_shift_back_bar",
+        "name": "Tempo -1 Bar",
+        "range": {
+          "min": 0.0,
+          "max": 1.0
+        },
+        "default": 0.0,
+        "units": "bool",
+        "automation": "optional"
       }
     ]
   },
   "runtime_rules": {
-    "status": "M3 fixed_ms scheduling implemented with preallocated queue; note timing/velocity interpolation uses the reference performance with Slack always applied and oversized (>8 byte) messages dropped.",
+    "status": "Cluster-based order-only matching with lookahead bounded by Slack + Cluster Window; fixed_ms scheduling with preallocated queue; note-off pairing FIFO by pitch; timing/velocity interpolation toward reference; oversized (>8 byte) messages dropped.",
     "realtime_safe": [
       "No allocations, no locks, no file/network IO in processBlock",
       "No logging/printf in audio thread",
@@ -137,8 +192,8 @@
       "scheduling": "Sample-accurate across blocks using absolute sample timeline and dueSample"
     },
     "midi_message_coverage": [
-      "note on/off (corrected)",
-      "velocity (corrected)",
+      "note on/off (timing corrected; note-offs paired FIFO)",
+      "velocity (corrected when enabled)",
       "other MIDI messages delayed by Slack (unchanged)"
     ],
     "overflow_policy": {

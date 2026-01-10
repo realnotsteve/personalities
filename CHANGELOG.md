@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.0.18 (2026-01-10)
+
+- **Summary:** PERSONALITIES (PRISM): Update CMakeLists.txt, devnotes.json
+- **Files:**
+  - `CMakeLists.txt`
+  - `devnotes.json`
+
 ## v0.0.16 (2026-01-02)
 
 - **Summary:** PERSONALITIES (PRISM): Update Source
