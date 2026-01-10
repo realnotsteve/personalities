@@ -299,10 +299,10 @@ void PluginEditor::ExpandButton::paintButton (juce::Graphics& g,
 PluginEditor::PluginEditor (PluginProcessor& p)
 : juce::AudioProcessorEditor (&p), processor (p)
 {
-    backgroundOpen = juce::ImageCache::getFromMemory (BinaryData::master_ui_open_png,
-        BinaryData::master_ui_open_pngSize);
-    backgroundClosed = juce::ImageCache::getFromMemory (BinaryData::master_ui_closed_png,
-        BinaryData::master_ui_closed_pngSize);
+    backgroundOpen = juce::ImageCache::getFromMemory (BinaryData::master_uiopen_png,
+        BinaryData::master_uiopen_pngSize);
+    backgroundClosed = juce::ImageCache::getFromMemory (BinaryData::master_uiclosed_png,
+        BinaryData::master_uiclosed_pngSize);
 
     referenceLabel.setText ("Performer", juce::dontSendNotification);
     referenceLabel.setJustificationType (juce::Justification::centredLeft);
