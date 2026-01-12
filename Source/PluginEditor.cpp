@@ -296,6 +296,52 @@ void PluginEditor::ExpandButton::paintButton (juce::Graphics& g,
     drawArrow (-direction, direction);
 }
 
+void PluginEditor::InfluenceSliderLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height,
+                                                                 float sliderPos, float minSliderPos, float maxSliderPos,
+                                                                 const juce::Slider::SliderStyle style, juce::Slider& slider)
+{
+    if (style != juce::Slider::LinearHorizontal)
+    {
+        juce::LookAndFeel_V4::drawLinearSlider (g, x, y, width, height, sliderPos, minSliderPos,
+                                                maxSliderPos, style, slider);
+        return;
+    }
+
+    juce::ignoreUnused (minSliderPos, maxSliderPos);
+
+    const auto bounds = juce::Rectangle<float> (static_cast<float> (x), static_cast<float> (y),
+                                                static_cast<float> (width), static_cast<float> (height));
+    const float pillHeight = juce::jmin (bounds.getHeight() * 0.7f, 14.0f);
+    const float pillWidth = pillHeight * 2.6f;
+    const float pillY = bounds.getY() + (bounds.getHeight() - pillHeight) * 0.5f;
+
+    float pillX = sliderPos - pillWidth * 0.5f;
+    pillX = juce::jlimit (bounds.getX(), bounds.getRight() - pillWidth, pillX);
+
+    const auto pillBounds = juce::Rectangle<float> (pillX, pillY, pillWidth, pillHeight);
+    const float cornerSize = pillHeight * 0.5f;
+    const auto baseColour = juce::Colour (0xff5d67db)
+        .withMultipliedAlpha (slider.isEnabled() ? 1.0f : 0.55f);
+
+    juce::ColourGradient fillGrad (baseColour.brighter (0.2f), pillBounds.getTopLeft(),
+                                   baseColour.darker (0.25f), pillBounds.getBottomLeft(), false);
+    g.setGradientFill (fillGrad);
+    g.fillRoundedRectangle (pillBounds, cornerSize);
+
+    g.setColour (baseColour.darker (0.55f));
+    g.drawRoundedRectangle (pillBounds, cornerSize, 1.0f);
+
+    auto highlight = pillBounds.reduced (1.0f, 1.0f);
+    highlight.setHeight (pillHeight * 0.45f);
+    g.setColour (juce::Colours::white.withAlpha (slider.isEnabled() ? 0.18f : 0.08f));
+    g.fillRoundedRectangle (highlight, highlight.getHeight() * 0.5f);
+
+    g.setColour (juce::Colours::white.withAlpha (slider.isEnabled() ? 0.9f : 0.6f));
+    g.setFont (juce::Font (pillHeight * 0.6f, juce::Font::bold));
+    g.drawFittedText (slider.getTextFromValue (slider.getValue()), pillBounds.toNearestInt(),
+                      juce::Justification::centred, 1);
+}
+
 PluginEditor::PluginEditor (PluginProcessor& p)
 : juce::AudioProcessorEditor (&p), processor (p)
 {
@@ -472,8 +518,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         return juce::jlimit (0.0, 1.0, text.getDoubleValue() / 100.0);
     };
     correctionSlider.setTextValueSuffix ("%");
-    correctionSlider.setColour (juce::Slider::trackColourId, juce::Colour (0x55d8d8d8));
-    correctionSlider.setColour (juce::Slider::thumbColourId, juce::Colour (0xff7f8cff));
+    correctionSlider.setLookAndFeel (&influenceSliderLookAndFeel);
     addAndMakeVisible (correctionSlider);
 
     inputLabel.setText ("IN", juce::dontSendNotification);
@@ -805,8 +850,8 @@ void PluginEditor::resized()
         expandButton.setBounds (getLocalBounds().withSizeKeepingCentre (buttonSize, buttonSize));
     }
 
-    muteButton.setBounds (scaleRect (502, 28, 46, 18));
-    bypassButton.setBounds (scaleRect (502, 52, 46, 18));
+    muteButton.setBounds (scaleRect (512, 54, 28, 14));
+    bypassButton.setBounds (scaleRect (512, 72, 28, 14));
     modeBox.setBounds (scaleRect (556, 34, 120, 24));
     inputLabel.setBounds (scaleRect (684, 28, 24, 18));
     inputIndicator.setBounds (scaleRect (672, 32, 8, 8));
@@ -814,7 +859,7 @@ void PluginEditor::resized()
     outputIndicator.setBounds (scaleRect (672, 56, 8, 8));
 
     referenceBox.setBounds (scaleRect (leftPanelX + 72, leftPanelY + 168, 160, 22));
-    correctionSlider.setBounds (scaleRect (leftPanelX + 18, leftPanelY + 214, 214, 16));
+    correctionSlider.setBounds (scaleRect (leftPanelX + 31, leftPanelY + 246, 193, 16));
 
     correctionDisplay.setBounds (scaleRect (rightPanelX + 16, rightPanelY + 12,
         rightPanelW - 32, rightPanelH - 24));

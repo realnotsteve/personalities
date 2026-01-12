@@ -64,6 +64,14 @@ private:
         bool isExpanded = false;
     };
 
+    class InfluenceSliderLookAndFeel final : public juce::LookAndFeel_V4
+    {
+    public:
+        void drawLinearSlider (juce::Graphics&, int x, int y, int width, int height,
+                               float sliderPos, float minSliderPos, float maxSliderPos,
+                               const juce::Slider::SliderStyle, juce::Slider&) override;
+    };
+
     void timerCallback() override;
     void updateUiVisibility();
 
@@ -83,6 +91,7 @@ private:
     juce::ToggleButton developerToggle;
     CorrectionDisplay correctionDisplay;
 
+    InfluenceSliderLookAndFeel influenceSliderLookAndFeel;
     juce::Slider slackSlider;
     juce::Label  slackLabel;
     juce::Slider clusterWindowSlider;
