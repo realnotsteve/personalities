@@ -4,7 +4,7 @@
     "alias": "Personalities",
     "author": "William Evans, PhD",
     "description": "JUCE/C++ plugin for Studio One (macOS). Loads a reference MIDI performance, then interpolates user note timing/velocity toward the reference using a fixed Slack buffer and a Correction control.",
-    "version": "0.0.23",
+    "version": "0.0.24",
     "repo_folder": "personalities",
     "slug": "personalities",
     "host_target": "Studio One (macOS)",
@@ -134,6 +134,39 @@
         "automation": "optional"
       },
       {
+        "id": "missing_timeout_ms",
+        "name": "Missing Timeout (ms)",
+        "range": {
+          "min": 0.0,
+          "max": 2000.0
+        },
+        "default": 250.0,
+        "units": "ms",
+        "automation": "optional"
+      },
+      {
+        "id": "extra_note_budget",
+        "name": "Extra Note Budget",
+        "range": {
+          "min": 0.0,
+          "max": 32.0
+        },
+        "default": 8.0,
+        "units": "count",
+        "automation": "optional"
+      },
+      {
+        "id": "pitch_tolerance",
+        "name": "Pitch Tolerance (st)",
+        "range": {
+          "min": 0.0,
+          "max": 12.0
+        },
+        "default": 0.0,
+        "units": "semitones",
+        "automation": "optional"
+      },
+      {
         "id": "velocity_correction",
         "name": "Velocity Correction",
         "range": {
@@ -180,7 +213,7 @@
     ]
   },
   "runtime_rules": {
-    "status": "Cluster-based order-only matching with lookahead bounded by Slack + Cluster Window; fixed_ms scheduling with preallocated queue; note-off pairing FIFO by pitch; timing/velocity interpolation toward reference; oversized (>8 byte) messages dropped.",
+    "status": "Cluster-based order-only matching with lookahead bounded by Slack + Cluster Window; fixed_ms scheduling with preallocated queue; note-off pairing FIFO by pitch; timing/velocity interpolation toward reference; extra note-ons/offs dropped; missing clusters advanced by timeout; oversized (>8 byte) messages dropped.",
     "realtime_safe": [
       "No allocations, no locks, no file/network IO in processBlock",
       "No logging/printf in audio thread",

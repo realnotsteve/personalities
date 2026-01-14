@@ -53,6 +53,12 @@ private:
         bool minimalStyle = false;
     };
 
+    class DeveloperPanelBackdrop final : public juce::Component
+    {
+    public:
+        void paint (juce::Graphics&) override;
+    };
+
     class ExpandButton final : public juce::Button
     {
     public:
@@ -88,8 +94,9 @@ private:
     juce::TextButton actualiserTabButton;
     juce::GroupComponent tabContainer;
     juce::GroupComponent developerBox;
-    juce::ToggleButton developerToggle;
+    juce::TextButton developerToggle;
     CorrectionDisplay correctionDisplay;
+    DeveloperPanelBackdrop developerPanelBackdrop;
 
     InfluenceSliderLookAndFeel influenceSliderLookAndFeel;
     juce::Slider slackSlider;
@@ -98,6 +105,12 @@ private:
     juce::Label  clusterWindowLabel;
     juce::Slider correctionSlider;
     juce::Label  correctionLabel;
+    juce::Slider missingTimeoutSlider;
+    juce::Label  missingTimeoutLabel;
+    juce::Slider extraNoteBudgetSlider;
+    juce::Label  extraNoteBudgetLabel;
+    juce::Slider pitchToleranceSlider;
+    juce::Label  pitchToleranceLabel;
     juce::Label buildInfoLabel;
     juce::Label inputLabel;
     PulseIndicator inputIndicator;
@@ -132,6 +145,9 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> slackAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> clusterWindowAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> correctionAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> missingTimeoutAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> extraNoteBudgetAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> pitchToleranceAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> velocityAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> muteAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bypassAttachment;

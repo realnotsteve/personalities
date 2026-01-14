@@ -162,6 +162,7 @@ private:
     int removeOldestActiveNote (int noteNumber, int channel) noexcept;
     int matchReferenceNoteInCluster (int noteNumber,
                                      int channel,
+                                     int pitchTolerance,
                                      ReferenceData& reference,
                                      int maxLookaheadClusters) noexcept;
     void handleClusterMiss (ReferenceData& reference) noexcept;
@@ -197,6 +198,9 @@ private:
     std::atomic<float>* delayMsParam = nullptr;
     std::atomic<float>* clusterWindowMsParam = nullptr;
     std::atomic<float>* correctionParam = nullptr;
+    std::atomic<float>* missingTimeoutMsParam = nullptr;
+    std::atomic<float>* extraNoteBudgetParam = nullptr;
+    std::atomic<float>* pitchToleranceParam = nullptr;
     std::atomic<float>* muteParam = nullptr;
     std::atomic<float>* bypassParam = nullptr;
     std::atomic<float>* velocityCorrectionParam = nullptr;
@@ -218,6 +222,7 @@ private:
     int referenceClusterCursor = 0;
     int referenceClusterMatchedCount = 0;
     int clusterMissStreak = 0;
+    int extraNoteStreak = 0;
     int referenceTempoIndex = 0;
     uint64_t noteOnOrderCounter = 0;
     float userVelocityEma = 64.0f;

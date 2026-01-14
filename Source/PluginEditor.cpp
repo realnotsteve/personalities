@@ -12,6 +12,9 @@ namespace
     constexpr const char* kParamDelayMs = "delay_ms";
     constexpr const char* kParamClusterWindowMs = "match_window_ms";
     constexpr const char* kParamCorrection = "correction";
+    constexpr const char* kParamMissingTimeoutMs = "missing_timeout_ms";
+    constexpr const char* kParamExtraNoteBudget = "extra_note_budget";
+    constexpr const char* kParamPitchTolerance = "pitch_tolerance";
     constexpr const char* kParamMute = "mute";
     constexpr const char* kParamBypass = "bypass";
     constexpr const char* kParamVelocityCorrection = "velocity_correction";
@@ -256,6 +259,15 @@ void PluginEditor::ExpandButton::setExpanded (bool shouldBeExpanded)
     repaint();
 }
 
+void PluginEditor::DeveloperPanelBackdrop::paint (juce::Graphics& g)
+{
+    auto bounds = getLocalBounds().toFloat();
+    g.setColour (juce::Colour (0xff0f1118));
+    g.fillRoundedRectangle (bounds, 12.0f);
+    g.setColour (juce::Colour (0x402a2f3a));
+    g.drawRoundedRectangle (bounds.reduced (0.5f), 12.0f, 1.0f);
+}
+
 void PluginEditor::ExpandButton::paintButton (juce::Graphics& g,
                                               bool shouldDrawButtonAsHighlighted,
                                               bool shouldDrawButtonAsDown)
@@ -386,9 +398,15 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     developerBox.setInterceptsMouseClicks (false, false);
     addAndMakeVisible (developerBox);
 
-    developerToggle.setButtonText ("Developer");
+    developerToggle.setButtonText ("DEV");
     developerToggle.setClickingTogglesState (true);
+    developerToggle.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff2a2f36));
+    developerToggle.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff4b5563));
+    developerToggle.setColour (juce::TextButton::textColourOffId, juce::Colours::white);
     addAndMakeVisible (developerToggle);
+
+    developerPanelBackdrop.setInterceptsMouseClicks (false, false);
+    addAndMakeVisible (developerPanelBackdrop);
 
     addAndMakeVisible (correctionDisplay);
 
@@ -492,8 +510,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     slackLabel.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (slackLabel);
 
-    slackSlider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    slackSlider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 20);
+    slackSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    slackSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 18);
     addAndMakeVisible (slackSlider);
 
     clusterWindowLabel.setText ("Cluster Window (ms)", juce::dontSendNotification);
@@ -522,6 +540,41 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     correctionSlider.setTextValueSuffix ("%");
     correctionSlider.setLookAndFeel (&influenceSliderLookAndFeel);
     addAndMakeVisible (correctionSlider);
+
+    missingTimeoutLabel.setText ("Missing Timeout (ms)", juce::dontSendNotification);
+    missingTimeoutLabel.setJustificationType (juce::Justification::centredLeft);
+    addAndMakeVisible (missingTimeoutLabel);
+
+    missingTimeoutSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    missingTimeoutSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 18);
+    missingTimeoutSlider.setRange (0.0, 2000.0, 1.0);
+    addAndMakeVisible (missingTimeoutSlider);
+
+    extraNoteBudgetLabel.setText ("Extra Note Budget", juce::dontSendNotification);
+    extraNoteBudgetLabel.setJustificationType (juce::Justification::centredLeft);
+    addAndMakeVisible (extraNoteBudgetLabel);
+
+    extraNoteBudgetSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    extraNoteBudgetSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 50, 18);
+    extraNoteBudgetSlider.setRange (0.0, 32.0, 1.0);
+    extraNoteBudgetSlider.textFromValueFunction = [] (double value)
+    {
+        return juce::String (static_cast<int> (std::lround (value)));
+    };
+    addAndMakeVisible (extraNoteBudgetSlider);
+
+    pitchToleranceLabel.setText ("Pitch Tolerance (st)", juce::dontSendNotification);
+    pitchToleranceLabel.setJustificationType (juce::Justification::centredLeft);
+    addAndMakeVisible (pitchToleranceLabel);
+
+    pitchToleranceSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    pitchToleranceSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 50, 18);
+    pitchToleranceSlider.setRange (0.0, 12.0, 1.0);
+    pitchToleranceSlider.textFromValueFunction = [] (double value)
+    {
+        return juce::String (static_cast<int> (std::lround (value)));
+    };
+    addAndMakeVisible (pitchToleranceSlider);
 
     inputLabel.setText ("IN", juce::dontSendNotification);
     inputLabel.setJustificationType (juce::Justification::centred);
@@ -649,6 +702,12 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         processor.apvts, kParamClusterWindowMs, clusterWindowSlider);
     correctionAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         processor.apvts, kParamCorrection, correctionSlider);
+    missingTimeoutAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        processor.apvts, kParamMissingTimeoutMs, missingTimeoutSlider);
+    extraNoteBudgetAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        processor.apvts, kParamExtraNoteBudget, extraNoteBudgetSlider);
+    pitchToleranceAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        processor.apvts, kParamPitchTolerance, pitchToleranceSlider);
     velocityAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor.apvts, kParamVelocityCorrection, velocityButton);
     muteAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -661,6 +720,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     developerToggle.setToggleState (false, juce::dontSendNotification);
     developerToggle.onClick = [this]()
     {
+        developerToggle.setButtonText (developerToggle.getToggleState() ? "X" : "DEV");
         updateUiVisibility();
         resized();
     };
@@ -809,6 +869,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     tabContainer.toBack();
     developerBox.toBack();
+    developerPanelBackdrop.toBack();
 
     startTimerHz (30);
 
@@ -868,12 +929,76 @@ void PluginEditor::resized()
     correctionDisplay.setBounds (scaleRect (rightPanelX + 16, rightPanelY + 12,
         rightPanelW - 32, rightPanelH - 24));
 
+    developerToggle.setBounds (scaleRect (512, 32, 32, 14));
+
+    const auto devPanelBounds = scaleRect (rightPanelX + 10, rightPanelY + 10,
+        rightPanelW - 20, rightPanelH - 20);
+    developerPanelBackdrop.setBounds (devPanelBounds);
+
+    const int panelX = devPanelBounds.getX();
+    const int panelY = devPanelBounds.getY();
+    const int panelW = devPanelBounds.getWidth();
+
+    const int rowHeight = juce::roundToInt (18.0f * scaleY);
+    const int rowGap = juce::roundToInt (4.0f * scaleY);
+    const int columnGap = juce::roundToInt (8.0f * (scaleX + scaleY) * 0.5f);
+    const int columnWidth = (panelW - columnGap) / 2;
+    const int labelWidth = juce::roundToInt (110.0f * scaleX);
+    const int sliderGap = juce::roundToInt (6.0f * scaleX);
+
+    referenceStatusLabel.setBounds (panelX + sliderGap, panelY + rowGap,
+        panelW - sliderGap * 2, rowHeight);
+
+    int leftY = panelY + rowHeight + rowGap * 2;
+    const int leftX = panelX;
+    const int rightX = panelX + columnWidth + columnGap;
+
+    auto placeSliderRow = [&](juce::Label& label, juce::Slider& slider)
+    {
+        label.setBounds (leftX, leftY, labelWidth, rowHeight);
+        slider.setBounds (leftX + labelWidth + sliderGap, leftY,
+            columnWidth - labelWidth - sliderGap, rowHeight);
+        leftY += rowHeight + rowGap;
+    };
+
+    placeSliderRow (slackLabel, slackSlider);
+    placeSliderRow (clusterWindowLabel, clusterWindowSlider);
+    placeSliderRow (missingTimeoutLabel, missingTimeoutSlider);
+    placeSliderRow (extraNoteBudgetLabel, extraNoteBudgetSlider);
+    placeSliderRow (pitchToleranceLabel, pitchToleranceSlider);
+
+    const int toggleWidth = (columnWidth - columnGap) / 2;
+    tempoShiftButton.setBounds (leftX, leftY, toggleWidth, rowHeight);
+    velocityButton.setBounds (leftX + toggleWidth + columnGap, leftY, toggleWidth, rowHeight);
+    leftY += rowHeight + rowGap;
+    resetStartOffsetButton.setBounds (leftX, leftY, columnWidth, rowHeight);
+    leftY += rowHeight + rowGap;
+    copyLogButton.setBounds (leftX, leftY, columnWidth, rowHeight);
+
+    int rightY = panelY + rowHeight + rowGap * 2;
+    auto placeValueRow = [&](juce::Label& label, juce::Label& value)
+    {
+        label.setBounds (rightX, rightY, labelWidth, rowHeight);
+        value.setBounds (rightX + labelWidth + sliderGap, rightY,
+            columnWidth - labelWidth - sliderGap, rowHeight);
+        rightY += rowHeight + rowGap;
+    };
+
+    placeValueRow (timingLabel, timingValueLabel);
+    placeValueRow (transportLabel, transportValueLabel);
+    placeValueRow (matchLabel, matchValueLabel);
+    placeValueRow (cpuLabel, cpuValueLabel);
+    placeValueRow (bpmLabel, bpmValueLabel);
+    placeValueRow (refIoiLabel, refIoiValueLabel);
+    placeValueRow (startOffsetLabel, startOffsetValueLabel);
+
     buildInfoLabel.setBounds (scaleRect (380, 14, 320, 12));
 }
 
 void PluginEditor::updateUiVisibility()
 {
     const bool showDeveloper = developerToggle.getToggleState();
+    developerToggle.setButtonText (showDeveloper ? "X" : "DEV");
 
     expandButton.setVisible (! isExpanded);
     referenceBox.setVisible (isExpanded);
@@ -885,7 +1010,8 @@ void PluginEditor::updateUiVisibility()
     referenceLoadedIndicator.setVisible (false);
     tabContainer.setVisible (false);
     developerBox.setVisible (false);
-    developerToggle.setVisible (false);
+    developerToggle.setVisible (isExpanded);
+    developerPanelBackdrop.setVisible (isExpanded && showDeveloper);
     virtuosoTabButton.setVisible (false);
     influencerTabButton.setVisible (false);
     actualiserTabButton.setVisible (false);
@@ -895,6 +1021,12 @@ void PluginEditor::updateUiVisibility()
     slackSlider.setVisible (isExpanded && showDeveloper);
     clusterWindowLabel.setVisible (isExpanded && showDeveloper);
     clusterWindowSlider.setVisible (isExpanded && showDeveloper);
+    missingTimeoutLabel.setVisible (isExpanded && showDeveloper);
+    missingTimeoutSlider.setVisible (isExpanded && showDeveloper);
+    extraNoteBudgetLabel.setVisible (isExpanded && showDeveloper);
+    extraNoteBudgetSlider.setVisible (isExpanded && showDeveloper);
+    pitchToleranceLabel.setVisible (isExpanded && showDeveloper);
+    pitchToleranceSlider.setVisible (isExpanded && showDeveloper);
     timingLabel.setVisible (isExpanded && showDeveloper);
     timingValueLabel.setVisible (isExpanded && showDeveloper);
     transportLabel.setVisible (isExpanded && showDeveloper);
