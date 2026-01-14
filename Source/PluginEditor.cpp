@@ -7,6 +7,8 @@ namespace
 {
     constexpr int kUiBaseWidth = 720;
     constexpr int kUiBaseHeight = 509;
+    constexpr float kClosedExpandButtonCentreX = 440.0f;
+    constexpr float kClosedExpandButtonCentreY = 257.0f;
     constexpr const char* kParamDelayMs = "delay_ms";
     constexpr const char* kParamClusterWindowMs = "match_window_ms";
     constexpr const char* kParamCorrection = "correction";
@@ -736,8 +738,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     buildInfoText << PERSONALITIES_VERSION_STRING << " | built " << PERSONALITIES_BUILD_TIMESTAMP;
     buildInfoLabel.setText (buildInfoText, juce::dontSendNotification);
     buildInfoLabel.setJustificationType (juce::Justification::centredRight);
-    buildInfoLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
-    buildInfoLabel.setFont (juce::Font (juce::FontOptions (12.0f)));
+    buildInfoLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
+    buildInfoLabel.setFont (juce::Font (juce::FontOptions (10.0f)));
     addAndMakeVisible (buildInfoLabel);
 
     lastInputNoteOnCounter = processor.getInputNoteOnCounter();
@@ -847,7 +849,9 @@ void PluginEditor::resized()
     if (! isExpanded)
     {
         const int buttonSize = juce::roundToInt (44.0f * (scaleX + scaleY) * 0.5f);
-        expandButton.setBounds (getLocalBounds().withSizeKeepingCentre (buttonSize, buttonSize));
+        const int centreX = juce::roundToInt (kClosedExpandButtonCentreX * scaleX);
+        const int centreY = juce::roundToInt (kClosedExpandButtonCentreY * scaleY);
+        expandButton.setBounds (centreX - buttonSize / 2, centreY - buttonSize / 2, buttonSize, buttonSize);
     }
 
     muteButton.setBounds (scaleRect (512, 54, 28, 14));
@@ -864,7 +868,7 @@ void PluginEditor::resized()
     correctionDisplay.setBounds (scaleRect (rightPanelX + 16, rightPanelY + 12,
         rightPanelW - 32, rightPanelH - 24));
 
-    buildInfoLabel.setBounds (scaleRect (360, 485, 340, 16));
+    buildInfoLabel.setBounds (scaleRect (380, 14, 320, 12));
 }
 
 void PluginEditor::updateUiVisibility()
@@ -910,7 +914,7 @@ void PluginEditor::updateUiVisibility()
     tempoShiftButton.setVisible (isExpanded && showDeveloper);
     velocityButton.setVisible (isExpanded && showDeveloper);
 
-    buildInfoLabel.setVisible (false);
+    buildInfoLabel.setVisible (true);
 }
 
 void PluginEditor::timerCallback()
