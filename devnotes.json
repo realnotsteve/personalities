@@ -4,7 +4,7 @@
     "alias": "Personalities",
     "author": "William Evans, PhD",
     "description": "JUCE/C++ plugin for Studio One (macOS). Loads a reference MIDI performance, then interpolates user note timing/velocity toward the reference using a fixed Slack buffer and a Correction control.",
-    "version": "0.0.22",
+    "version": "0.0.23",
     "repo_folder": "personalities",
     "slug": "personalities",
     "host_target": "Studio One (macOS)",
@@ -197,10 +197,10 @@
       "other MIDI messages delayed by Slack (unchanged)"
     ],
     "overflow_policy": {
-      "status": "TBD",
+      "status": "Pass-through without delay when full",
       "recommendations": [
-        "Pass-through without delay when full (best for live play)",
-        "OR drop newest events when full (simpler but may feel glitchy)"
+        "Implemented: pass-through without delay when full (best for live play)",
+        "Alternative: drop newest events when full (simpler but may feel glitchy)"
       ]
     }
   },
@@ -213,7 +213,7 @@
       "M5: Stress test: fast playing + sustain + parameter changes (if enabled)"
     ],
     "queue_design": {
-      "data": "Ring buffer of scheduled MIDI events {dueSample:uint64, msg:MidiMessage, order:uint64(optional)}",
+      "data": "Preallocated array of scheduled MIDI events {dueSample:uint64, order:uint64, size:uint8, data[8]}; insert keeps dueSample/order ordering (array shift).",
       "timeline": "uint64 timelineSample increments by numSamples each block",
       "enqueue": "dueSample = timelineSample + sampleOffset + delaySamples",
       "emit": "Emit all queued events whose dueSample falls within [timelineSample, timelineSample + numSamples)",
