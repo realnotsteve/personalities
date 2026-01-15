@@ -9,7 +9,11 @@ public:
     ~PluginEditor() override = default;
 
     void paint (juce::Graphics&) override;
+    void paintOverChildren (juce::Graphics&) override;
     void resized() override;
+    bool keyPressed (const juce::KeyPress&) override;
+    void mouseMove (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
 
 private:
     class PulseIndicator final : public juce::Component
@@ -139,6 +143,10 @@ private:
     juce::Image backgroundOpen;
     juce::Image backgroundClosed;
     bool isExpanded = false;
+    bool overlayEnabled = false;
+    bool boundsOverlayEnabled = false;
+    bool hasMousePosition = false;
+    juce::Point<int> lastMousePosition;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> slackAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> clusterWindowAttachment;

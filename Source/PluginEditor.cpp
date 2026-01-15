@@ -9,6 +9,7 @@ namespace
     constexpr int kUiBaseHeight = 509;
     constexpr float kClosedExpandButtonCentreX = 440.0f;
     constexpr float kClosedExpandButtonCentreY = 257.0f;
+    constexpr float kOverlayAlpha = 0.45f;
     constexpr const char* kParamDelayMs = "delay_ms";
     constexpr const char* kParamClusterWindowMs = "match_window_ms";
     constexpr const char* kParamCorrection = "correction";
@@ -869,6 +870,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     startTimerHz (30);
 
+    setWantsKeyboardFocus (true);
+    setMouseClickGrabsKeyboardFocus (true);
     setSize (kUiBaseWidth, kUiBaseHeight);
 }
 
@@ -881,10 +884,126 @@ void PluginEditor::paint (juce::Graphics& g)
         g.drawImage (background, getLocalBounds().toFloat());
 }
 
+void PluginEditor::paintOverChildren (juce::Graphics& g)
+{
+    if (overlayEnabled && isExpanded && backgroundOpen.isValid())
+    {
+        juce::Graphics::ScopedSaveState state (g);
+        g.setOpacity (kOverlayAlpha);
+        g.drawImage (backgroundOpen, getLocalBounds().toFloat());
+    }
+
+    if (! boundsOverlayEnabled)
+        return;
+
+    juce::Graphics::ScopedSaveState state (g);
+    g.setFont (juce::Font (juce::FontOptions (12.0f)));
+
+    auto getTextWidth = [&](const juce::String& text)
+    {
+        juce::GlyphArrangement glyphs;
+        glyphs.addLineOfText (g.getCurrentFont(), text, 0.0f, 0.0f);
+        return static_cast<int> (std::ceil (glyphs.getBoundingBox (0, -1, true).getWidth()));
+    };
+
+    auto drawLabel = [&](const juce::String& text, int x, int y)
+    {
+        const int padding = 2;
+        const int height = 14;
+        const int width = getTextWidth (text) + padding * 2;
+        int drawX = x;
+        int drawY = y - height;
+        if (drawY < 0)
+            drawY = y + 2;
+        if (drawX + width > getWidth())
+            drawX = getWidth() - width;
+        if (drawX < 0)
+            drawX = 0;
+
+        const juce::Rectangle<int> box (drawX, drawY, width, height);
+        g.setColour (juce::Colours::black.withAlpha (0.6f));
+        g.fillRect (box);
+        g.setColour (juce::Colours::white.withAlpha (0.9f));
+        g.drawText (text, box, juce::Justification::centredLeft, false);
+    };
+
+    auto drawBounds = [&](juce::Component& comp, const char* name)
+    {
+        if (! comp.isVisible())
+            return;
+
+        const auto bounds = comp.getBounds();
+        if (bounds.isEmpty())
+            return;
+
+        g.setColour (juce::Colours::aqua.withAlpha (0.6f));
+        g.drawRect (bounds, 1.0f);
+
+        const juce::String label = juce::String (name) + " "
+            + juce::String (bounds.getX()) + "," + juce::String (bounds.getY())
+            + " " + juce::String (bounds.getWidth()) + "x" + juce::String (bounds.getHeight());
+        drawLabel (label, bounds.getX(), bounds.getY());
+    };
+
+    drawBounds (referenceBox, "referenceBox");
+    drawBounds (correctionSlider, "correctionSlider");
+    drawBounds (correctionDisplay, "correctionDisplay");
+    drawBounds (developerToggle, "developerToggle");
+    drawBounds (developerPanelBackdrop, "developerPanelBackdrop");
+    drawBounds (expandButton, "expandButton");
+    drawBounds (slackSlider, "slackSlider");
+    drawBounds (slackLabel, "slackLabel");
+    drawBounds (clusterWindowSlider, "clusterWindowSlider");
+    drawBounds (clusterWindowLabel, "clusterWindowLabel");
+    drawBounds (missingTimeoutSlider, "missingTimeoutSlider");
+    drawBounds (missingTimeoutLabel, "missingTimeoutLabel");
+    drawBounds (extraNoteBudgetSlider, "extraNoteBudgetSlider");
+    drawBounds (extraNoteBudgetLabel, "extraNoteBudgetLabel");
+    drawBounds (pitchToleranceSlider, "pitchToleranceSlider");
+    drawBounds (pitchToleranceLabel, "pitchToleranceLabel");
+    drawBounds (tempoShiftButton, "tempoShiftButton");
+    drawBounds (velocityButton, "velocityButton");
+    drawBounds (resetStartOffsetButton, "resetStartOffsetButton");
+    drawBounds (copyLogButton, "copyLogButton");
+    drawBounds (referenceStatusLabel, "referenceStatusLabel");
+    drawBounds (timingLabel, "timingLabel");
+    drawBounds (timingValueLabel, "timingValueLabel");
+    drawBounds (transportLabel, "transportLabel");
+    drawBounds (transportValueLabel, "transportValueLabel");
+    drawBounds (matchLabel, "matchLabel");
+    drawBounds (matchValueLabel, "matchValueLabel");
+    drawBounds (cpuLabel, "cpuLabel");
+    drawBounds (cpuValueLabel, "cpuValueLabel");
+    drawBounds (bpmLabel, "bpmLabel");
+    drawBounds (bpmValueLabel, "bpmValueLabel");
+    drawBounds (refIoiLabel, "refIoiLabel");
+    drawBounds (refIoiValueLabel, "refIoiValueLabel");
+    drawBounds (startOffsetLabel, "startOffsetLabel");
+    drawBounds (startOffsetValueLabel, "startOffsetValueLabel");
+    drawBounds (muteButton, "muteButton");
+    drawBounds (bypassButton, "bypassButton");
+    drawBounds (modeBox, "modeBox");
+    drawBounds (inputLabel, "inputLabel");
+    drawBounds (outputLabel, "outputLabel");
+    drawBounds (buildInfoLabel, "buildInfoLabel");
+
+    if (hasMousePosition)
+    {
+        const int x = lastMousePosition.x;
+        const int y = lastMousePosition.y;
+        g.setColour (juce::Colours::yellow.withAlpha (0.8f));
+        g.drawLine (static_cast<float> (x - 6), static_cast<float> (y),
+            static_cast<float> (x + 6), static_cast<float> (y), 1.0f);
+        g.drawLine (static_cast<float> (x), static_cast<float> (y - 6),
+            static_cast<float> (x), static_cast<float> (y + 6), 1.0f);
+        drawLabel ("mouse " + juce::String (x) + "," + juce::String (y), x + 8, y + 8);
+    }
+}
+
 void PluginEditor::resized()
 {
-    const float scaleX = static_cast<float> (getWidth()) / static_cast<float> (kUiBaseWidth);
-    const float scaleY = static_cast<float> (getHeight()) / static_cast<float> (kUiBaseHeight);
+    const float scaleX = 1.0f;
+    const float scaleY = 1.0f;
 
     auto scaleRect = [&](int x, int y, int w, int h)
     {
@@ -987,6 +1106,39 @@ void PluginEditor::resized()
     placeValueRow (startOffsetLabel, startOffsetValueLabel);
 
     buildInfoLabel.setBounds (scaleRect (380, 14, 320, 12));
+}
+
+bool PluginEditor::keyPressed (const juce::KeyPress& key)
+{
+    const auto keyChar = key.getTextCharacter();
+    if (keyChar == 'o' || keyChar == 'O')
+    {
+        overlayEnabled = ! overlayEnabled;
+        repaint();
+        return true;
+    }
+
+    if (keyChar == 'b' || keyChar == 'B')
+    {
+        boundsOverlayEnabled = ! boundsOverlayEnabled;
+        repaint();
+        return true;
+    }
+
+    return false;
+}
+
+void PluginEditor::mouseMove (const juce::MouseEvent& event)
+{
+    lastMousePosition = event.getPosition();
+    hasMousePosition = true;
+    if (boundsOverlayEnabled)
+        repaint();
+}
+
+void PluginEditor::mouseDrag (const juce::MouseEvent& event)
+{
+    mouseMove (event);
 }
 
 void PluginEditor::updateUiVisibility()
