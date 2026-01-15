@@ -113,9 +113,7 @@ private:
     juce::Label  pitchToleranceLabel;
     juce::Label buildInfoLabel;
     juce::Label inputLabel;
-    PulseIndicator inputIndicator;
     juce::Label outputLabel;
-    PulseIndicator outputIndicator;
     juce::Label timingLabel;
     juce::Label timingValueLabel;
     juce::Label transportLabel;

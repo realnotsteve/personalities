@@ -40,7 +40,7 @@ juce_add_plugin(Personalities
     NEEDS_MIDI_OUTPUT TRUE
     IS_MIDI_EFFECT FALSE
 
-    FORMATS VST3
+    FORMATS VST3 Standalone
 )
 
 if(PERSONALITIES_BUILD_NOTEFX)
@@ -130,11 +130,11 @@ endif()
 
 if(PERSONALITIES_BUILD_NOTEFX)
     add_custom_target(Personalities_AllPlugins
-        DEPENDS Personalities_VST3 Personalities_NoteFX_VST3
+        DEPENDS Personalities_VST3 Personalities_NoteFX_VST3 Personalities_Standalone
     )
 else()
     add_custom_target(Personalities_AllPlugins
-        DEPENDS Personalities_VST3
+        DEPENDS Personalities_VST3 Personalities_Standalone
     )
 endif()
 

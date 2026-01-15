@@ -578,21 +578,17 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     inputLabel.setText ("IN", juce::dontSendNotification);
     inputLabel.setJustificationType (juce::Justification::centred);
-    inputLabel.setColour (juce::Label::backgroundColourId, juce::Colour (0x80233149));
+    inputLabel.setColour (juce::Label::backgroundColourId, juce::Colour (0xff1c212b));
     inputLabel.setColour (juce::Label::textColourId, juce::Colours::white);
-    inputLabel.setColour (juce::Label::outlineColourId, juce::Colour (0x40294d6b));
+    inputLabel.setColour (juce::Label::outlineColourId, juce::Colour (0xff2f3642));
     addAndMakeVisible (inputLabel);
-
-    addAndMakeVisible (inputIndicator);
 
     outputLabel.setText ("OUT", juce::dontSendNotification);
     outputLabel.setJustificationType (juce::Justification::centred);
-    outputLabel.setColour (juce::Label::backgroundColourId, juce::Colour (0x80233149));
+    outputLabel.setColour (juce::Label::backgroundColourId, juce::Colour (0xff2b84ff));
     outputLabel.setColour (juce::Label::textColourId, juce::Colours::white);
-    outputLabel.setColour (juce::Label::outlineColourId, juce::Colour (0x40294d6b));
+    outputLabel.setColour (juce::Label::outlineColourId, juce::Colour (0xff2f3642));
     addAndMakeVisible (outputLabel);
-
-    addAndMakeVisible (outputIndicator);
 
     timingLabel.setText ("Timing (ms)", juce::dontSendNotification);
     timingLabel.setJustificationType (juce::Justification::centred);
@@ -915,13 +911,11 @@ void PluginEditor::resized()
         expandButton.setBounds (centreX - buttonSize / 2, centreY - buttonSize / 2, buttonSize, buttonSize);
     }
 
-    muteButton.setBounds (scaleRect (512, 54, 28, 14));
-    bypassButton.setBounds (scaleRect (512, 72, 28, 14));
-    modeBox.setBounds (scaleRect (556, 34, 120, 24));
-    inputLabel.setBounds (scaleRect (684, 28, 24, 18));
-    inputIndicator.setBounds (scaleRect (672, 32, 8, 8));
-    outputLabel.setBounds (scaleRect (684, 52, 24, 18));
-    outputIndicator.setBounds (scaleRect (672, 56, 8, 8));
+    muteButton.setBounds (scaleRect (512, 58, 28, 14));
+    bypassButton.setBounds (scaleRect (512, 76, 28, 14));
+    modeBox.setBounds (scaleRect (572, 58, 104, 22));
+    inputLabel.setBounds (scaleRect (688, 28, 24, 18));
+    outputLabel.setBounds (scaleRect (688, 52, 24, 18));
 
     referenceBox.setBounds (scaleRect (leftPanelX + 72, leftPanelY + 168, 160, 22));
     correctionSlider.setBounds (scaleRect (leftPanelX + 31, leftPanelY + 246, 193, 16));
@@ -1052,28 +1046,31 @@ void PluginEditor::updateUiVisibility()
 void PluginEditor::timerCallback()
 {
     const auto nowMs = juce::Time::getMillisecondCounterHiRes();
+    const auto indicatorBlue = juce::Colour (0xff2b84ff);
+    const auto indicatorBlueBright = juce::Colour (0xff4aa2ff);
+    const auto indicatorOff = juce::Colour (0xff1c212b);
 
     const auto inputCounter = processor.getInputNoteOnCounter();
     if (inputCounter != lastInputNoteOnCounter)
     {
         lastInputNoteOnCounter = inputCounter;
         lastInputFlashMs = nowMs;
-        inputIndicator.setActive (true);
     }
 
-    if (inputIndicator.isActive() && (nowMs - lastInputFlashMs) > 120.0)
-        inputIndicator.setActive (false);
+    const bool inputActive = (nowMs - lastInputFlashMs) <= 120.0;
+    inputLabel.setColour (juce::Label::backgroundColourId,
+        inputActive ? indicatorBlueBright : indicatorOff);
 
     const auto outputCounter = processor.getOutputNoteOnCounter();
     if (outputCounter != lastOutputNoteOnCounter)
     {
         lastOutputNoteOnCounter = outputCounter;
         lastOutputFlashMs = nowMs;
-        outputIndicator.setActive (true);
     }
 
-    if (outputIndicator.isActive() && (nowMs - lastOutputFlashMs) > 120.0)
-        outputIndicator.setActive (false);
+    const bool outputActive = (nowMs - lastOutputFlashMs) <= 120.0;
+    outputLabel.setColour (juce::Label::backgroundColourId,
+        outputActive ? indicatorBlueBright : indicatorBlue);
 
     correctionDisplay.setValues (processor.getLastTimingDeltaMs(),
         processor.getLastNoteOffDeltaMs(),

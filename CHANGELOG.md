@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.0.25 (2026-01-15)
+
+- **Summary:** PERSONALITIES (PRISM): Update 4 areas (e.g., CMakeLists.txt)
+- **Files:**
+  - `CMakeLists.txt`
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `devnotes.json`
+  - `tmp/TemporaryDirectory.4b8BsK/.keep-directory`
+  - `tmp/TemporaryDirectory.5LmUmz/.keep-directory`
+  - `tmp/TemporaryDirectory.6QVWMu/.keep-directory`
+  - `tmp/TemporaryDirectory.CPniYs/.keep-directory`
+  - `tmp/TemporaryDirectory.Foi7Jw/.keep-directory`
+  - `tmp/TemporaryDirectory.OEYTOB/.keep-directory`
+  - `tmp/TemporaryDirectory.br7ti7/.keep-directory`
+
 ## v0.0.24 (2026-01-14)
 
 - **Summary:** PERSONALITIES (PRISM): Update 4 areas (e.g., Source)
