@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.0.28 (2026-01-16)
+
+- **Summary:** PERSONALITIES (PRISM): Update assets
+- **Files:**
+  - `assets/gui/all-states/header/button-bypass/button-bypass-off.png`
+  - `assets/gui/all-states/header/button-bypass/button-bypass-on.png`
+  - `assets/gui/all-states/header/button-mute/button-mute-off.png`
+  - `assets/gui/all-states/header/button-mute/button-mute-on.png`
+  - `assets/gui/all-states/header/dropdown-mode_selector.png`
+  - `assets/gui/closed-state/background/background-closed.png`
+  - `assets/gui/open-state/stateless/drop-down-performer.png`
+  - `assets/gui/open-state/stateless/effect-strength-slider-handle.png`
+
 ## v0.0.27 (2026-01-16)
 
 - **Summary:** PERSONALITIES (PRISM): Update 3 areas (e.g., "assets)
