@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.0.27 (2026-01-16)
+
+- **Summary:** PERSONALITIES (PRISM): Update 3 areas (e.g., "assets)
+- **Files:**
+  - `Source/PluginEditor.cpp`
+  - `assets/gui/all-states/footer/button-reset.png`
+  - `assets/gui/all-states/footer/button-tooltips-checkbox.png`
+  - `assets/gui/all-states/header/button-bypass-off.png`
+  - `assets/gui/all-states/header/button-bypass-on.png`
+  - `assets/gui/all-states/header/button-mute-off.png`
+  - `assets/gui/all-states/header/button-mute-on.png`
+  - `assets/gui/all-states/header/dropdown-moder-selector.png`
+  - `assets/gui/all-states/header/indicator-midi-in-active.png`
+  - `assets/gui/all-states/header/indicator-midi-in-inactive.png`
+  - `assets/gui/all-states/header/indicator-midi-out-active.png`
+  - `assets/gui/all-states/header/indicator-midi-out-inactive.png`
+  - `assets/gui/closed-state/background/background-closed.png`
+  - `assets/gui/closed-state/widgets/button-openner.png`
+  - `assets/gui/open-state/background/background-open.png`
+  - `assets/gui/open-state/widgets/drop-down-performer.png`
+  - `assets/gui/open-state/widgets/effect-strength-slider-handle.png`
+  - `"assets/gui/\342\200\242 Archive.zip"`
+  - `assets/master_ui-closed.png`
+  - `assets/master_ui-open.png`
+  - `assets/reference_performance.mid`
+  - `assets/user_performance.mid`
+
 ## v0.0.26 (2026-01-15)
 
 - **Summary:** PERSONALITIES (PRISM): Update Source

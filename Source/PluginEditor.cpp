@@ -1030,11 +1030,11 @@ void PluginEditor::resized()
         expandButton.setBounds (centreX - buttonSize / 2, centreY - buttonSize / 2, buttonSize, buttonSize);
     }
 
-    muteButton.setBounds (scaleRect (512, 58, 28, 14));
-    bypassButton.setBounds (scaleRect (512, 76, 28, 14));
-    modeBox.setBounds (scaleRect (572, 58, 104, 22));
-    inputLabel.setBounds (scaleRect (688, 28, 24, 18));
-    outputLabel.setBounds (scaleRect (688, 52, 24, 18));
+    muteButton.setBounds (scaleRect (512, 53, 29, 15));
+    bypassButton.setBounds (scaleRect (512, 72, 29, 15));
+    modeBox.setBounds (scaleRect (590, 60, 76, 20));
+    inputLabel.setBounds (scaleRect (681, 50, 20, 17));
+    outputLabel.setBounds (scaleRect (681, 72, 20, 17));
 
     referenceBox.setBounds (scaleRect (leftPanelX + 72, leftPanelY + 168, 160, 22));
     correctionSlider.setBounds (scaleRect (leftPanelX + 31, leftPanelY + 246, 193, 16));
