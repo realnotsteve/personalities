@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.0.29 (2026-01-16)
+
+- **Summary:** PERSONALITIES (PRISM): Update 3 areas (e.g., CMakeLists.txt)
+- **Files:**
+  - `CMakeLists.txt`
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `assets/gui/closed-state/background/background-closed.png`
+  - `assets/gui/mode-closed/background/background-closed-x0y0.png`
+  - `assets/gui/mode-closed/widgets/button-openner/button-openner-x654y560.png`
+  - `assets/gui/mode-none/widgets/button-bypass/button-bypass-off-x1026y144.png`
+  - `assets/gui/mode-none/widgets/button-bypass/button-bypass-on-x1026y144.png`
+  - `assets/gui/mode-none/widgets/button-mute/button-mute-off-x1026y108.png`
+  - `assets/gui/mode-none/widgets/button-mute/button-mute-on-x1026y108.png`
+  - `assets/gui/mode-none/widgets/button-reset/button-reset-x20~y958.png`
+  - `assets/gui/mode-none/widgets/checkbox-tooltips/checkbox-tooltips-x262~y962.png`
+  - `assets/gui/mode-none/widgets/dropdown-mode_selector/dropdown-modeselector-x1188y118.png`
+  - `assets/gui/mode-none/widgets/indicator-midi_in/indicator-midi_in-active-null-null-x1368y100.png`
+  - `assets/gui/mode-none/widgets/indicator-midi_in/indicator-midi_in-inactive-null-null-x1368y100.png`
+  - `assets/gui/mode-none/widgets/indicator-midi_out/indicator-midi_out-active-x1368yy148.png`
+  - `assets/gui/mode-none/widgets/indicator-midi_out/indicator-midi_out-inactive-x1368y148.png`
+  - `assets/gui/mode-open/background/background-open-x0y0.png`
+  - `assets/gui/mode-open/widgets/dropdown_menu-performer_selector/dropdown_menu-performer_selector-x176y718.png`
+  - `assets/gui/mode-open/widgets/slider-effect_strength/slider-effect_strength-x82y818_0%~ x410y818_100%.png`
+  - `assets/gui/open-state/background/background-open.png`
+
 ## v0.0.28 (2026-01-16)
 
 - **Summary:** PERSONALITIES (PRISM): Update assets

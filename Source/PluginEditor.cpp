@@ -7,9 +7,8 @@ namespace
 {
     constexpr int kUiBaseWidth = 720;
     constexpr int kUiBaseHeight = 509;
-    constexpr float kClosedExpandButtonCentreX = 440.0f;
-    constexpr float kClosedExpandButtonCentreY = 257.0f;
     constexpr float kOverlayAlpha = 0.45f;
+    constexpr float kAssetScale = 0.5f;
     constexpr const char* kParamDelayMs = "delay_ms";
     constexpr const char* kParamClusterWindowMs = "match_window_ms";
     constexpr const char* kParamCorrection = "correction";
@@ -260,6 +259,12 @@ void PluginEditor::ExpandButton::setExpanded (bool shouldBeExpanded)
     repaint();
 }
 
+void PluginEditor::ExpandButton::setImage (juce::Image image)
+{
+    buttonImage = std::move (image);
+    repaint();
+}
+
 void PluginEditor::DeveloperPanelBackdrop::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
@@ -273,42 +278,17 @@ void PluginEditor::ExpandButton::paintButton (juce::Graphics& g,
                                               bool shouldDrawButtonAsHighlighted,
                                               bool shouldDrawButtonAsDown)
 {
-    auto bounds = getLocalBounds().toFloat();
-    const auto centre = bounds.getCentre();
-    const float radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f - 1.0f;
+    if (! buttonImage.isValid())
+        return;
 
-    juce::Colour fill = juce::Colour (0x1a1d24);
+    juce::Graphics::ScopedSaveState state (g);
+    float opacity = 1.0f;
     if (shouldDrawButtonAsDown)
-        fill = fill.brighter (0.2f);
+        opacity = 0.8f;
     else if (shouldDrawButtonAsHighlighted)
-        fill = fill.brighter (0.1f);
-
-    g.setColour (fill);
-    g.fillEllipse (centre.x - radius, centre.y - radius, radius * 2.0f, radius * 2.0f);
-
-    g.setColour (juce::Colours::white.withAlpha (0.18f));
-    g.drawEllipse (centre.x - radius, centre.y - radius, radius * 2.0f, radius * 2.0f, 1.0f);
-
-    const float arrowSize = radius * 0.65f;
-    const float shaft = arrowSize * 0.45f;
-    const float head = arrowSize * 0.25f;
-
-    auto drawArrow = [&](float xDir, float yDir)
-    {
-        juce::Point<float> tip = centre + juce::Point<float> (xDir, yDir) * arrowSize;
-        juce::Point<float> tail = centre + juce::Point<float> (-xDir, -yDir) * shaft;
-        juce::Point<float> left = tip + juce::Point<float> (-yDir, xDir) * head;
-        juce::Point<float> right = tip + juce::Point<float> (yDir, -xDir) * head;
-
-        g.drawLine ({ tail, tip }, 2.0f);
-        g.drawLine ({ left, tip }, 2.0f);
-        g.drawLine ({ right, tip }, 2.0f);
-    };
-
-    g.setColour (juce::Colours::white.withAlpha (0.85f));
-    const float direction = isExpanded ? -1.0f : 1.0f;
-    drawArrow (direction, direction);
-    drawArrow (-direction, direction);
+        opacity = 0.9f;
+    g.setOpacity (opacity);
+    g.drawImage (buttonImage, getLocalBounds().toFloat());
 }
 
 void PluginEditor::InfluenceSliderLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height,
@@ -360,10 +340,13 @@ void PluginEditor::InfluenceSliderLookAndFeel::drawLinearSlider (juce::Graphics&
 PluginEditor::PluginEditor (PluginProcessor& p)
 : juce::AudioProcessorEditor (&p), processor (p)
 {
-    backgroundOpen = juce::ImageCache::getFromMemory (BinaryData::master_uiopen_png,
-        BinaryData::master_uiopen_pngSize);
-    backgroundClosed = juce::ImageCache::getFromMemory (BinaryData::master_uiclosed_png,
-        BinaryData::master_uiclosed_pngSize);
+    backgroundOpen = juce::ImageCache::getFromMemory (BinaryData::background_open_x0y0_png,
+        BinaryData::background_open_x0y0_pngSize);
+    backgroundClosed = juce::ImageCache::getFromMemory (BinaryData::background_closed_x0y0_png,
+        BinaryData::background_closed_x0y0_pngSize);
+    openButtonImage = juce::ImageCache::getFromMemory (BinaryData::button_openner_x654y560_png,
+        BinaryData::button_openner_x654y560_pngSize);
+    expandButton.setImage (openButtonImage);
 
     referenceLabel.setText ("Performer", juce::dontSendNotification);
     referenceLabel.setJustificationType (juce::Justification::centredLeft);
@@ -1012,6 +995,13 @@ void PluginEditor::resized()
                                      juce::roundToInt (w * scaleX),
                                      juce::roundToInt (h * scaleY));
     };
+    auto assetRect = [&](int x, int y, int w, int h)
+    {
+        return scaleRect (juce::roundToInt (x * kAssetScale),
+                          juce::roundToInt (y * kAssetScale),
+                          juce::roundToInt (w * kAssetScale),
+                          juce::roundToInt (h * kAssetScale));
+    };
 
     constexpr int leftPanelX = 10;
     constexpr int leftPanelY = 161;
@@ -1022,12 +1012,10 @@ void PluginEditor::resized()
     constexpr int rightPanelW = 409;
     constexpr int rightPanelH = 278;
 
-    if (! isExpanded)
+    if (! isExpanded && openButtonImage.isValid())
     {
-        const int buttonSize = juce::roundToInt (44.0f * (scaleX + scaleY) * 0.5f);
-        const int centreX = juce::roundToInt (kClosedExpandButtonCentreX * scaleX);
-        const int centreY = juce::roundToInt (kClosedExpandButtonCentreY * scaleY);
-        expandButton.setBounds (centreX - buttonSize / 2, centreY - buttonSize / 2, buttonSize, buttonSize);
+        expandButton.setBounds (assetRect (654, 560,
+            openButtonImage.getWidth(), openButtonImage.getHeight()));
     }
 
     muteButton.setBounds (scaleRect (512, 53, 29, 15));

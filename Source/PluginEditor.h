@@ -68,10 +68,12 @@ private:
     public:
         ExpandButton();
         void setExpanded (bool shouldBeExpanded);
+        void setImage (juce::Image image);
 
     private:
         void paintButton (juce::Graphics&, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
         bool isExpanded = false;
+        juce::Image buttonImage;
     };
 
     class InfluenceSliderLookAndFeel final : public juce::LookAndFeel_V4
@@ -142,6 +144,7 @@ private:
 
     juce::Image backgroundOpen;
     juce::Image backgroundClosed;
+    juce::Image openButtonImage;
     bool isExpanded = false;
     bool overlayEnabled = false;
     bool boundsOverlayEnabled = false;

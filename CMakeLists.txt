@@ -18,8 +18,9 @@ add_subdirectory(JUCE)
 
 juce_add_binary_data(PersonalitiesAssets
     SOURCES
-        assets/master_ui-open.png
-        assets/master_ui-closed.png
+        assets/gui/mode-open/background/background-open-x0y0.png
+        assets/gui/mode-closed/background/background-closed-x0y0.png
+        assets/gui/mode-closed/widgets/button-openner/button-openner-x654y560.png
 )
 
 set(PERSONALITIES_BUILD_INFO_DIR "${CMAKE_BINARY_DIR}/generated")
