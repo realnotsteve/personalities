@@ -254,6 +254,7 @@ private:
     juce::Label startOffsetValueLabel;
     juce::TextButton resetStartOffsetButton;
     juce::TextButton copyLogButton;
+    juce::ToggleButton velocityButton;
     ImageToggleButton developerConsoleButton;
     ImageToggleButton muteButton;
     ImageToggleButton bypassButton;
@@ -297,6 +298,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> missingTimeoutAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> extraNoteBudgetAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> pitchToleranceAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> velocityAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> muteAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bypassAttachment;
     juce::Array<juce::File> referenceFiles;

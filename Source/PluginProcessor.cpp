@@ -16,7 +16,6 @@ namespace
     constexpr const char* kParamMute = "mute";
     constexpr const char* kParamBypass = "bypass";
     constexpr const char* kParamVelocityCorrection = "velocity_correction";
-    constexpr const char* kParamTempoShiftBackBar = "tempo_shift_back_bar";
     constexpr const char* kReferencePathProperty = "reference_path";
     constexpr float kMaxSlackMs = 2000.0f;
     constexpr float kMinClusterWindowMs = 20.0f;
@@ -110,7 +109,6 @@ PluginProcessor::PluginProcessor()
     muteParam = apvts.getRawParameterValue (kParamMute);
     bypassParam = apvts.getRawParameterValue (kParamBypass);
     velocityCorrectionParam = apvts.getRawParameterValue (kParamVelocityCorrection);
-    tempoShiftParam = apvts.getRawParameterValue (kParamTempoShiftBackBar);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParameterLayout()
@@ -175,12 +173,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginProcessor::createParam
         juce::ParameterID { kParamVelocityCorrection, 1 },
         "Velocity Correction",
         true
-    ));
-
-    layout.add (std::make_unique<juce::AudioParameterBool>(
-        juce::ParameterID { kParamTempoShiftBackBar, 1 },
-        "Tempo -1 Bar",
-        false
     ));
 
     return layout;
@@ -262,13 +254,6 @@ double PluginProcessor::getSampleRateForUi() const noexcept
 
 std::shared_ptr<const PluginProcessor::ReferenceDisplayData> PluginProcessor::getReferenceDisplayDataForUi() const noexcept
 {
-    const int mode = tempoShiftModeForUi.load (std::memory_order_relaxed);
-    if (mode == 1)
-    {
-        if (auto shifted = std::atomic_load (&referenceDisplayDataShifted))
-            return shifted;
-    }
-
     return std::atomic_load (&referenceDisplayData);
 }
 
@@ -385,24 +370,13 @@ bool PluginProcessor::rebuildReferenceClusters (float clusterWindowMs, juce::Str
         : 0.0;
 
     auto baseReference = buildReferenceFromFile (juce::File (referencePath),
-        0.0,
         clusterWindowSeconds,
         errorMessage);
     if (baseReference == nullptr)
         return false;
 
-    juce::String shiftError;
-    auto shiftedReference = buildReferenceFromFile (juce::File (referencePath),
-        1.0,
-        clusterWindowSeconds,
-        shiftError);
-    if (shiftedReference == nullptr)
-        shiftedReference = baseReference;
-
     std::atomic_store (&referenceData, baseReference);
-    std::atomic_store (&referenceDataShifted, shiftedReference);
     std::atomic_store (&referenceDisplayData, buildReferenceDisplayData (*baseReference));
-    std::atomic_store (&referenceDisplayDataShifted, buildReferenceDisplayData (*shiftedReference));
     referenceTempoIndex = 0;
     clearMissLog();
     resetPlaybackState();
@@ -423,9 +397,7 @@ bool PluginProcessor::resetToDefaults (juce::String& errorMessage)
     lastReferenceLoadError.clear();
 
     std::atomic_store (&referenceData, std::shared_ptr<ReferenceData>());
-    std::atomic_store (&referenceDataShifted, std::shared_ptr<ReferenceData>());
     std::atomic_store (&referenceDisplayData, std::shared_ptr<ReferenceDisplayData>());
-    std::atomic_store (&referenceDisplayDataShifted, std::shared_ptr<ReferenceDisplayData>());
 
     referenceTempoIndex = 0;
     queueSize = 0;
@@ -434,7 +406,6 @@ bool PluginProcessor::resetToDefaults (juce::String& errorMessage)
     referenceTransportStartSample = 0;
     lastHostSample = -1;
     transportWasPlaying = false;
-    tempoShiftMode = 0;
     userStartSampleCaptured = false;
     uiNoteFifo.reset();
 
@@ -479,7 +450,6 @@ void PluginProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
     lastHostSample = -1;
     transportPlaying.store (false, std::memory_order_relaxed);
     transportWasPlaying = false;
-    tempoShiftMode = 0;
     resetPlaybackState();
     cpuLoadPercent.store (0.0f, std::memory_order_relaxed);
     hostBpm.store (-1.0f, std::memory_order_relaxed);
@@ -500,19 +470,6 @@ void PluginProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
             ref->clusterMatchedCounts.assign (ref->clusters.size(), 0);
 
         std::atomic_store (&referenceDisplayData, buildReferenceDisplayData (*ref));
-    }
-
-    if (auto refShifted = std::atomic_load (&referenceDataShifted))
-    {
-        if (! refShifted->sampleTimesValid || refShifted->sampleRate != sampleRateHz)
-            updateReferenceSampleTimes (*refShifted, sampleRateHz);
-
-        if (refShifted->matched.size() != refShifted->notes.size())
-            refShifted->matched.assign (refShifted->notes.size(), 0);
-        if (refShifted->clusterMatchedCounts.size() != refShifted->clusters.size())
-            refShifted->clusterMatchedCounts.assign (refShifted->clusters.size(), 0);
-
-        std::atomic_store (&referenceDisplayDataShifted, buildReferenceDisplayData (*refShifted));
     }
     updateUiTimelineState();
 }
@@ -608,19 +565,6 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     const int pitchTolerance = (pitchToleranceParam != nullptr)
         ? static_cast<int> (std::lround (pitchToleranceParam->load()))
         : 0;
-    const int requestedMode = 0; // Tempo shift is permanently disabled.
-
-    if (isPlaying)
-    {
-        if (! transportWasPlaying)
-            tempoShiftMode = requestedMode;
-    }
-    else if (requestedMode != tempoShiftMode)
-    {
-        tempoShiftMode = requestedMode;
-        resetPlaybackState();
-        clearMissLog();
-    }
 
     if (isPlaying)
     {
@@ -658,11 +602,6 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 
     const uint64_t slackSamples = isPlaying ? latchedSlackSamples : msToSamples (sampleRateHz, slackMs);
     auto reference = std::atomic_load (&referenceData);
-    if (tempoShiftMode == 1)
-    {
-        if (auto shifted = std::atomic_load (&referenceDataShifted))
-            reference = shifted;
-    }
     const bool hasReference = isPlaying
         && reference != nullptr
         && reference->sampleTimesValid
@@ -670,7 +609,8 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         && ! reference->clusters.empty();
     const float effectiveCorrection = hasReference ? correction : 0.0f;
     const uint64_t referenceStartSample = hasReference ? reference->firstNoteSample : 0;
-    const bool velocityCorrectionEnabled = true; // Velocity correction is always on.
+    const bool velocityCorrectionEnabled = (velocityCorrectionParam == nullptr)
+        || (velocityCorrectionParam->load() >= 0.5f);
     const bool dropExtraNotes = hasReference;
     const int clampedExtraNoteBudget = juce::jmax (0, extraNoteBudget);
     const float clusterWindowMs = hasReference
@@ -1231,7 +1171,6 @@ std::shared_ptr<PluginProcessor::ReferenceDisplayData> PluginProcessor::buildRef
 }
 
 std::shared_ptr<PluginProcessor::ReferenceData> PluginProcessor::buildReferenceFromFile (const juce::File& file,
-                                                                                        double shiftBars,
                                                                                         double clusterWindowSeconds,
                                                                                         juce::String& errorMessage)
 {
@@ -1288,26 +1227,6 @@ std::shared_ptr<PluginProcessor::ReferenceData> PluginProcessor::buildReferenceF
         tempoEvents.addEvent (defaultTempo);
     }
 
-    double barTicks = 0.0;
-    if (timeFormat > 0)
-    {
-        const double ticksPerQuarter = static_cast<double> (timeFormat & 0x7fff);
-        const double beatFactor = 4.0 / static_cast<double> (juce::jmax (1, timeSigDenominator));
-        const double barBeats = static_cast<double> (juce::jmax (1, timeSigNumerator)) * beatFactor;
-        barTicks = ticksPerQuarter * barBeats;
-    }
-
-    const double shiftTicks = (barTicks > 0.0) ? (shiftBars * barTicks) : 0.0;
-    juce::MidiMessageSequence tempoEventsShifted;
-    for (int i = 0; i < tempoEvents.getNumEvents(); ++i)
-    {
-        auto message = tempoEvents.getEventPointer (i)->message;
-        if (shiftTicks != 0.0)
-            message.setTimeStamp (juce::jmax (0.0, message.getTimeStamp() - shiftTicks));
-        tempoEventsShifted.addEvent (message);
-    }
-    tempoEventsShifted.sort();
-
     auto reference = std::make_shared<ReferenceData>();
     reference->sourcePath = file.getFullPathName();
     reference->notes.reserve (static_cast<size_t> (combined.getNumEvents()));
@@ -1335,8 +1254,8 @@ std::shared_ptr<PluginProcessor::ReferenceData> PluginProcessor::buildReferenceF
             static_cast<int> (std::lround (message.getVelocity() * 127.0f))));
         note.offVelocity = static_cast<uint8_t> (juce::jlimit (0, 127,
             static_cast<int> (std::lround (noteOffMessage.getVelocity() * 127.0f))));
-        note.onTimeSeconds = convertTicksToSeconds (message.getTimeStamp(), tempoEventsShifted, timeFormat);
-        note.offTimeSeconds = convertTicksToSeconds (noteOffMessage.getTimeStamp(), tempoEventsShifted, timeFormat);
+        note.onTimeSeconds = convertTicksToSeconds (message.getTimeStamp(), tempoEvents, timeFormat);
+        note.offTimeSeconds = convertTicksToSeconds (noteOffMessage.getTimeStamp(), tempoEvents, timeFormat);
 
         reference->notes.push_back (note);
     }
@@ -1405,17 +1324,17 @@ std::shared_ptr<PluginProcessor::ReferenceData> PluginProcessor::buildReferenceF
     reference->clusterMatchedCounts.assign (reference->clusters.size(), 0);
 
     std::vector<ReferenceTempoEvent> tempoSeconds;
-    tempoSeconds.reserve (static_cast<size_t> (tempoEventsShifted.getNumEvents()));
+    tempoSeconds.reserve (static_cast<size_t> (tempoEvents.getNumEvents()));
 
-    for (int i = 0; i < tempoEventsShifted.getNumEvents(); ++i)
+    for (int i = 0; i < tempoEvents.getNumEvents(); ++i)
     {
-        const auto& message = tempoEventsShifted.getEventPointer (i)->message;
+        const auto& message = tempoEvents.getEventPointer (i)->message;
         if (! message.isTempoMetaEvent())
             continue;
 
         const double secondsPerQuarter = message.getTempoSecondsPerQuarterNote();
         const double bpm = secondsPerQuarter > 0.0 ? (60.0 / secondsPerQuarter) : 120.0;
-        const double timeSeconds = convertTicksToSeconds (message.getTimeStamp(), tempoEventsShifted, timeFormat);
+        const double timeSeconds = convertTicksToSeconds (message.getTimeStamp(), tempoEvents, timeFormat);
         tempoSeconds.push_back ({ timeSeconds, bpm });
     }
 
@@ -1476,7 +1395,6 @@ bool PluginProcessor::loadReferenceFromFile (const juce::File& file, juce::Strin
     }
 
     auto baseReference = buildReferenceFromFile (file,
-        0.0,
         clusterWindowSeconds,
         errorMessage);
     if (baseReference == nullptr)
@@ -1485,18 +1403,8 @@ bool PluginProcessor::loadReferenceFromFile (const juce::File& file, juce::Strin
         return false;
     }
 
-    juce::String shiftError;
-    auto shiftedReference = buildReferenceFromFile (file,
-        1.0,
-        clusterWindowSeconds,
-        shiftError);
-    if (shiftedReference == nullptr)
-        shiftedReference = baseReference;
-
     std::atomic_store (&referenceData, baseReference);
-    std::atomic_store (&referenceDataShifted, shiftedReference);
     std::atomic_store (&referenceDisplayData, buildReferenceDisplayData (*baseReference));
-    std::atomic_store (&referenceDisplayDataShifted, buildReferenceDisplayData (*shiftedReference));
     referencePath = baseReference->sourcePath;
     apvts.state.setProperty (kReferencePathProperty, referencePath, nullptr);
     referenceTempoIndex = 0;
@@ -1736,13 +1644,6 @@ void PluginProcessor::resetPlaybackState() noexcept
             std::fill (ref->clusterMatchedCounts.begin(), ref->clusterMatchedCounts.end(), 0);
     }
 
-    if (auto refShifted = std::atomic_load (&referenceDataShifted))
-    {
-        if (refShifted->matched.size() == refShifted->notes.size())
-            std::fill (refShifted->matched.begin(), refShifted->matched.end(), 0);
-        if (refShifted->clusterMatchedCounts.size() == refShifted->clusters.size())
-            std::fill (refShifted->clusterMatchedCounts.begin(), refShifted->clusterMatchedCounts.end(), 0);
-    }
 }
 
 void PluginProcessor::resetVelocityStats() noexcept
@@ -1833,7 +1734,6 @@ void PluginProcessor::updateUiTimelineState() noexcept
     timelineSampleForUi.store (timelineSample, std::memory_order_relaxed);
     referenceTransportStartSampleForUi.store (referenceTransportStartSample, std::memory_order_relaxed);
     sampleRateForUi.store (sampleRateHz, std::memory_order_relaxed);
-    tempoShiftModeForUi.store (tempoShiftMode, std::memory_order_relaxed);
 }
 
 void PluginProcessor::logMiss (int noteNumber,

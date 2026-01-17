@@ -207,7 +207,6 @@ private:
     void resetPlaybackState() noexcept;
     void updateReferenceSampleTimes (ReferenceData& data, double sampleRate);
     std::shared_ptr<ReferenceData> buildReferenceFromFile (const juce::File& file,
-                                                           double shiftBars,
                                                            double clusterWindowSeconds,
                                                            juce::String& errorMessage);
     void resetVelocityStats() noexcept;
@@ -243,7 +242,6 @@ private:
     std::atomic<uint64_t> timelineSampleForUi { 0 };
     std::atomic<uint64_t> referenceTransportStartSampleForUi { 0 };
     std::atomic<double> sampleRateForUi { 44100.0 };
-    std::atomic<int> tempoShiftModeForUi { 0 };
     double sampleRateHz = 44100.0;
     std::atomic<float>* delayMsParam = nullptr;
     std::atomic<float>* clusterWindowMsParam = nullptr;
@@ -254,7 +252,6 @@ private:
     std::atomic<float>* muteParam = nullptr;
     std::atomic<float>* bypassParam = nullptr;
     std::atomic<float>* velocityCorrectionParam = nullptr;
-    std::atomic<float>* tempoShiftParam = nullptr;
     std::atomic<uint32_t> inputNoteOnCounter { 0 };
     std::atomic<uint32_t> outputNoteOnCounter { 0 };
     std::atomic<float> lastTimingDeltaMs { 0.0f };
@@ -266,9 +263,7 @@ private:
     std::atomic<float> hostBpm { -1.0f };
     std::atomic<float> referenceBpm { -1.0f };
     std::shared_ptr<ReferenceData> referenceData;
-    std::shared_ptr<ReferenceData> referenceDataShifted;
     std::shared_ptr<ReferenceDisplayData> referenceDisplayData;
-    std::shared_ptr<ReferenceDisplayData> referenceDisplayDataShifted;
     std::array<ActiveNote, kMaxActiveNotes> activeNotes {};
     int activeNoteCount = 0;
     int referenceClusterCursor = 0;
@@ -289,7 +284,6 @@ private:
     std::atomic<bool> startOffsetValid { false };
     int64_t lastHostSample = -1;
     bool transportWasPlaying = false;
-    int tempoShiftMode = 0;
     std::atomic<bool> transportPlaying { false };
     juce::String referencePath;
     juce::String pendingReferencePath;

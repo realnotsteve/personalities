@@ -55,6 +55,7 @@ namespace
     constexpr const char* kParamPitchTolerance = "pitch_tolerance";
     constexpr const char* kParamMute = "mute";
     constexpr const char* kParamBypass = "bypass";
+    constexpr const char* kParamVelocityCorrection = "velocity_correction";
 
     const juce::String kChooseLabel = juce::String::fromUTF8 ("Choose\xe2\x80\xa6");
 
@@ -1083,7 +1084,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     slackLabel.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (slackLabel);
 
-    slackSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    slackSlider.setSliderStyle (juce::Slider::IncDecButtons);
     slackSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 18);
     addAndMakeVisible (slackSlider);
 
@@ -1091,7 +1092,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     clusterWindowLabel.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (clusterWindowLabel);
 
-    clusterWindowSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    clusterWindowSlider.setSliderStyle (juce::Slider::IncDecButtons);
     clusterWindowSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 70, 20);
     clusterWindowSlider.setRange (20.0, 1000.0, 1.0);
     addAndMakeVisible (clusterWindowSlider);
@@ -1118,7 +1119,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     missingTimeoutLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (missingTimeoutLabel);
 
-    missingTimeoutSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    missingTimeoutSlider.setSliderStyle (juce::Slider::IncDecButtons);
     missingTimeoutSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 18);
     missingTimeoutSlider.setRange (0.0, 2000.0, 1.0);
     addAndMakeVisible (missingTimeoutSlider);
@@ -1127,7 +1128,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     extraNoteBudgetLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (extraNoteBudgetLabel);
 
-    extraNoteBudgetSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    extraNoteBudgetSlider.setSliderStyle (juce::Slider::IncDecButtons);
     extraNoteBudgetSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 50, 18);
     extraNoteBudgetSlider.setRange (0.0, 32.0, 1.0);
     extraNoteBudgetSlider.textFromValueFunction = [] (double value)
@@ -1140,7 +1141,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     pitchToleranceLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (pitchToleranceLabel);
 
-    pitchToleranceSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    pitchToleranceSlider.setSliderStyle (juce::Slider::IncDecButtons);
     pitchToleranceSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 50, 18);
     pitchToleranceSlider.setRange (0.0, 12.0, 1.0);
     pitchToleranceSlider.textFromValueFunction = [] (double value)
@@ -1208,6 +1209,10 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     startOffsetValueLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (startOffsetValueLabel);
 
+    velocityButton.setButtonText ("Vel Corr");
+    velocityButton.setClickingTogglesState (true);
+    addAndMakeVisible (velocityButton);
+
     resetStartOffsetButton.setButtonText ("Reset Start Offset");
     addAndMakeVisible (resetStartOffsetButton);
 
@@ -1272,6 +1277,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         processor.apvts, kParamExtraNoteBudget, extraNoteBudgetSlider);
     pitchToleranceAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         processor.apvts, kParamPitchTolerance, pitchToleranceSlider);
+    velocityAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        processor.apvts, kParamVelocityCorrection, velocityButton);
     muteAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor.apvts, kParamMute, muteButton);
     bypassAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -1546,6 +1553,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     drawBounds (extraNoteBudgetLabel, "extraNoteBudgetLabel");
     drawBounds (pitchToleranceSlider, "pitchToleranceSlider");
     drawBounds (pitchToleranceLabel, "pitchToleranceLabel");
+    drawBounds (velocityButton, "velocityButton");
     drawBounds (resetStartOffsetButton, "resetStartOffsetButton");
     drawBounds (copyLogButton, "copyLogButton");
     drawBounds (referenceStatusLabel, "referenceStatusLabel");
@@ -1748,6 +1756,8 @@ void PluginEditor::resized()
     placeSliderRow (extraNoteBudgetLabel, extraNoteBudgetSlider);
     placeSliderRow (pitchToleranceLabel, pitchToleranceSlider);
 
+    velocityButton.setBounds (leftX, leftY, columnWidth, rowHeight);
+    leftY += rowHeight + rowGap;
     resetStartOffsetButton.setBounds (leftX, leftY, columnWidth, rowHeight);
     leftY += rowHeight + rowGap;
     copyLogButton.setBounds (leftX, leftY, columnWidth, rowHeight);
@@ -1859,6 +1869,7 @@ void PluginEditor::updateUiVisibility()
     extraNoteBudgetSlider.setVisible (isExpanded && showDeveloperConsole);
     pitchToleranceLabel.setVisible (isExpanded && showDeveloperConsole);
     pitchToleranceSlider.setVisible (isExpanded && showDeveloperConsole);
+    velocityButton.setVisible (isExpanded && showDeveloperConsole);
     timingLabel.setVisible (isExpanded && showDeveloperConsole);
     timingValueLabel.setVisible (isExpanded && showDeveloperConsole);
     matchLabel.setVisible (isExpanded && showDeveloperConsole);
