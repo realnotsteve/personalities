@@ -242,8 +242,6 @@ private:
     ImageIndicator outputIndicator;
     juce::Label timingLabel;
     juce::Label timingValueLabel;
-    juce::Label transportLabel;
-    juce::Label transportValueLabel;
     juce::Label matchLabel;
     juce::Label matchValueLabel;
     juce::Label cpuLabel;
@@ -256,8 +254,6 @@ private:
     juce::Label startOffsetValueLabel;
     juce::TextButton resetStartOffsetButton;
     juce::TextButton copyLogButton;
-    juce::ToggleButton tempoShiftButton;
-    juce::ToggleButton velocityButton;
     ImageToggleButton developerConsoleButton;
     ImageToggleButton muteButton;
     ImageToggleButton bypassButton;
@@ -301,10 +297,8 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> missingTimeoutAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> extraNoteBudgetAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> pitchToleranceAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> velocityAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> muteAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bypassAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> tempoShiftAttachment;
     juce::Array<juce::File> referenceFiles;
     uint32_t lastInputNoteOnCounter = 0;
     double lastInputFlashMs = 0.0;

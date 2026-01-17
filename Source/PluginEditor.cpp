@@ -55,8 +55,6 @@ namespace
     constexpr const char* kParamPitchTolerance = "pitch_tolerance";
     constexpr const char* kParamMute = "mute";
     constexpr const char* kParamBypass = "bypass";
-    constexpr const char* kParamVelocityCorrection = "velocity_correction";
-    constexpr const char* kParamTempoShiftBackBar = "tempo_shift_back_bar";
 
     const juce::String kChooseLabel = juce::String::fromUTF8 ("Choose\xe2\x80\xa6");
 
@@ -1165,15 +1163,6 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     timingValueLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (timingValueLabel);
 
-    transportLabel.setText ("Transport", juce::dontSendNotification);
-    transportLabel.setJustificationType (juce::Justification::centredLeft);
-    addAndMakeVisible (transportLabel);
-
-    transportValueLabel.setText ("Stopped", juce::dontSendNotification);
-    transportValueLabel.setJustificationType (juce::Justification::centredLeft);
-    transportValueLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
-    addAndMakeVisible (transportValueLabel);
-
     matchLabel.setText ("Match/Miss", juce::dontSendNotification);
     matchLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (matchLabel);
@@ -1224,14 +1213,6 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     copyLogButton.setButtonText ("Copy Miss Log");
     addAndMakeVisible (copyLogButton);
-
-    tempoShiftButton.setButtonText ("Tempo -1 Bar");
-    tempoShiftButton.setClickingTogglesState (true);
-    addAndMakeVisible (tempoShiftButton);
-
-    velocityButton.setButtonText ("Vel Corr");
-    velocityButton.setClickingTogglesState (true);
-    addAndMakeVisible (velocityButton);
 
     muteButton.setClickingTogglesState (true);
     muteButton.setImages (muteOnImage, muteOffImage);
@@ -1291,14 +1272,10 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         processor.apvts, kParamExtraNoteBudget, extraNoteBudgetSlider);
     pitchToleranceAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         processor.apvts, kParamPitchTolerance, pitchToleranceSlider);
-    velocityAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-        processor.apvts, kParamVelocityCorrection, velocityButton);
     muteAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor.apvts, kParamMute, muteButton);
     bypassAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor.apvts, kParamBypass, bypassButton);
-    tempoShiftAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-        processor.apvts, kParamTempoShiftBackBar, tempoShiftButton);
 
     auto applyClusterWindow = [this]
     {
@@ -1399,10 +1376,6 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         juce::dontSendNotification);
 
     lastTransportPlaying = processor.isTransportPlaying();
-    transportValueLabel.setText (lastTransportPlaying ? "Playing" : "Stopped",
-        juce::dontSendNotification);
-    transportValueLabel.setColour (juce::Label::textColourId,
-        lastTransportPlaying ? juce::Colours::lightgreen : juce::Colours::lightgrey);
 
     lastCpuPercent = processor.getCpuLoadPercent();
     cpuValueLabel.setText (juce::String (lastCpuPercent, 1) + "%", juce::dontSendNotification);
@@ -1573,15 +1546,11 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     drawBounds (extraNoteBudgetLabel, "extraNoteBudgetLabel");
     drawBounds (pitchToleranceSlider, "pitchToleranceSlider");
     drawBounds (pitchToleranceLabel, "pitchToleranceLabel");
-    drawBounds (tempoShiftButton, "tempoShiftButton");
-    drawBounds (velocityButton, "velocityButton");
     drawBounds (resetStartOffsetButton, "resetStartOffsetButton");
     drawBounds (copyLogButton, "copyLogButton");
     drawBounds (referenceStatusLabel, "referenceStatusLabel");
     drawBounds (timingLabel, "timingLabel");
     drawBounds (timingValueLabel, "timingValueLabel");
-    drawBounds (transportLabel, "transportLabel");
-    drawBounds (transportValueLabel, "transportValueLabel");
     drawBounds (matchLabel, "matchLabel");
     drawBounds (matchValueLabel, "matchValueLabel");
     drawBounds (cpuLabel, "cpuLabel");
@@ -1779,11 +1748,6 @@ void PluginEditor::resized()
     placeSliderRow (extraNoteBudgetLabel, extraNoteBudgetSlider);
     placeSliderRow (pitchToleranceLabel, pitchToleranceSlider);
 
-    const int toggleGap = juce::roundToInt (6.0f * scaleX);
-    const int toggleWidth = (columnWidth - toggleGap) / 2;
-    tempoShiftButton.setBounds (leftX, leftY, toggleWidth, rowHeight);
-    velocityButton.setBounds (leftX + toggleWidth + toggleGap, leftY, toggleWidth, rowHeight);
-    leftY += rowHeight + rowGap;
     resetStartOffsetButton.setBounds (leftX, leftY, columnWidth, rowHeight);
     leftY += rowHeight + rowGap;
     copyLogButton.setBounds (leftX, leftY, columnWidth, rowHeight);
@@ -1797,7 +1761,6 @@ void PluginEditor::resized()
     };
 
     placeValueRow (timingLabel, timingValueLabel);
-    placeValueRow (transportLabel, transportValueLabel);
     placeValueRow (matchLabel, matchValueLabel);
     placeValueRow (cpuLabel, cpuValueLabel);
     placeValueRow (bpmLabel, bpmValueLabel);
@@ -1898,8 +1861,6 @@ void PluginEditor::updateUiVisibility()
     pitchToleranceSlider.setVisible (isExpanded && showDeveloperConsole);
     timingLabel.setVisible (isExpanded && showDeveloperConsole);
     timingValueLabel.setVisible (isExpanded && showDeveloperConsole);
-    transportLabel.setVisible (isExpanded && showDeveloperConsole);
-    transportValueLabel.setVisible (isExpanded && showDeveloperConsole);
     matchLabel.setVisible (isExpanded && showDeveloperConsole);
     matchValueLabel.setVisible (isExpanded && showDeveloperConsole);
     cpuLabel.setVisible (isExpanded && showDeveloperConsole);
@@ -1912,8 +1873,6 @@ void PluginEditor::updateUiVisibility()
     startOffsetValueLabel.setVisible (isExpanded && showDeveloperConsole);
     resetStartOffsetButton.setVisible (isExpanded && showDeveloperConsole);
     copyLogButton.setVisible (isExpanded && showDeveloperConsole);
-    tempoShiftButton.setVisible (isExpanded && showDeveloperConsole);
-    velocityButton.setVisible (isExpanded && showDeveloperConsole);
 
     resetButton.setVisible (true);
     tooltipsCheckbox.setVisible (true);
@@ -2181,9 +2140,6 @@ void PluginEditor::timerCallback()
     if (isPlaying != lastTransportPlaying)
     {
         lastTransportPlaying = isPlaying;
-        transportValueLabel.setText (isPlaying ? "Playing" : "Stopped", juce::dontSendNotification);
-        transportValueLabel.setColour (juce::Label::textColourId,
-            isPlaying ? juce::Colours::lightgreen : juce::Colours::lightgrey);
         resetStartOffsetButton.setEnabled (! isPlaying);
         copyLogButton.setEnabled (! isPlaying);
         clusterWindowSlider.setEnabled (! isPlaying);

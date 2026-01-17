@@ -608,9 +608,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     const int pitchTolerance = (pitchToleranceParam != nullptr)
         ? static_cast<int> (std::lround (pitchToleranceParam->load()))
         : 0;
-    const bool requestedMinusOne = (tempoShiftParam != nullptr)
-        && (tempoShiftParam->load() >= 0.5f);
-    const int requestedMode = requestedMinusOne ? 1 : 0;
+    const int requestedMode = 0; // Tempo shift is permanently disabled.
 
     if (isPlaying)
     {
@@ -672,8 +670,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         && ! reference->clusters.empty();
     const float effectiveCorrection = hasReference ? correction : 0.0f;
     const uint64_t referenceStartSample = hasReference ? reference->firstNoteSample : 0;
-    const bool velocityCorrectionEnabled = (velocityCorrectionParam == nullptr)
-        || (velocityCorrectionParam->load() >= 0.5f);
+    const bool velocityCorrectionEnabled = true; // Velocity correction is always on.
     const bool dropExtraNotes = hasReference;
     const int clampedExtraNoteBudget = juce::jmax (0, extraNoteBudget);
     const float clusterWindowMs = hasReference
