@@ -219,6 +219,57 @@ uint32_t PluginProcessor::getMissedNoteOnCounter() const noexcept
     return missedNoteOnCounter.load (std::memory_order_relaxed);
 }
 
+int PluginProcessor::popUiNoteEvents (std::vector<UiNoteEvent>& dest, int maxEvents)
+{
+    dest.clear();
+    const int available = uiNoteFifo.getNumReady();
+    const int toRead = juce::jlimit (0, maxEvents, available);
+    if (toRead <= 0)
+        return 0;
+
+    int start1 = 0;
+    int size1 = 0;
+    int start2 = 0;
+    int size2 = 0;
+    uiNoteFifo.prepareToRead (toRead, start1, size1, start2, size2);
+
+    dest.reserve (static_cast<size_t> (size1 + size2));
+    for (int i = 0; i < size1; ++i)
+        dest.push_back (uiNoteEvents[static_cast<size_t> (start1 + i)]);
+    for (int i = 0; i < size2; ++i)
+        dest.push_back (uiNoteEvents[static_cast<size_t> (start2 + i)]);
+
+    uiNoteFifo.finishedRead (size1 + size2);
+    return size1 + size2;
+}
+
+uint64_t PluginProcessor::getTimelineSampleForUi() const noexcept
+{
+    return timelineSampleForUi.load (std::memory_order_relaxed);
+}
+
+uint64_t PluginProcessor::getReferenceTransportStartSampleForUi() const noexcept
+{
+    return referenceTransportStartSampleForUi.load (std::memory_order_relaxed);
+}
+
+double PluginProcessor::getSampleRateForUi() const noexcept
+{
+    return sampleRateForUi.load (std::memory_order_relaxed);
+}
+
+std::shared_ptr<const PluginProcessor::ReferenceDisplayData> PluginProcessor::getReferenceDisplayDataForUi() const noexcept
+{
+    const int mode = tempoShiftModeForUi.load (std::memory_order_relaxed);
+    if (mode == 1)
+    {
+        if (auto shifted = std::atomic_load (&referenceDisplayDataShifted))
+            return shifted;
+    }
+
+    return std::atomic_load (&referenceDisplayData);
+}
+
 bool PluginProcessor::isTransportPlaying() const noexcept
 {
     return transportPlaying.load (std::memory_order_relaxed);
@@ -348,6 +399,8 @@ bool PluginProcessor::rebuildReferenceClusters (float clusterWindowMs, juce::Str
 
     std::atomic_store (&referenceData, baseReference);
     std::atomic_store (&referenceDataShifted, shiftedReference);
+    std::atomic_store (&referenceDisplayData, buildReferenceDisplayData (*baseReference));
+    std::atomic_store (&referenceDisplayDataShifted, buildReferenceDisplayData (*shiftedReference));
     referenceTempoIndex = 0;
     clearMissLog();
     resetPlaybackState();
@@ -367,6 +420,8 @@ bool PluginProcessor::resetToDefaults (juce::String& errorMessage)
 
     std::atomic_store (&referenceData, std::shared_ptr<ReferenceData>());
     std::atomic_store (&referenceDataShifted, std::shared_ptr<ReferenceData>());
+    std::atomic_store (&referenceDisplayData, std::shared_ptr<ReferenceDisplayData>());
+    std::atomic_store (&referenceDisplayDataShifted, std::shared_ptr<ReferenceDisplayData>());
 
     referenceTempoIndex = 0;
     queueSize = 0;
@@ -377,6 +432,7 @@ bool PluginProcessor::resetToDefaults (juce::String& errorMessage)
     transportWasPlaying = false;
     tempoShiftMode = 0;
     userStartSampleCaptured = false;
+    uiNoteFifo.reset();
 
     resetPlaybackState();
     clearMissLog();
@@ -396,6 +452,7 @@ bool PluginProcessor::resetToDefaults (juce::String& errorMessage)
     startOffsetBars.store (0.0f, std::memory_order_relaxed);
     startOffsetValid.store (false, std::memory_order_relaxed);
     startOffsetResetRequested.store (false, std::memory_order_relaxed);
+    updateUiTimelineState();
 
     return true;
 }
@@ -413,6 +470,7 @@ void PluginProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
     juce::ignoreUnused (samplesPerBlock);
 
     sampleRateHz = newSampleRate;
+    sampleRateForUi.store (sampleRateHz, std::memory_order_relaxed);
     timelineSample = 0;
     lastHostSample = -1;
     transportPlaying.store (false, std::memory_order_relaxed);
@@ -436,6 +494,8 @@ void PluginProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
             ref->matched.assign (ref->notes.size(), 0);
         if (ref->clusterMatchedCounts.size() != ref->clusters.size())
             ref->clusterMatchedCounts.assign (ref->clusters.size(), 0);
+
+        std::atomic_store (&referenceDisplayData, buildReferenceDisplayData (*ref));
     }
 
     if (auto refShifted = std::atomic_load (&referenceDataShifted))
@@ -447,8 +507,10 @@ void PluginProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
             refShifted->matched.assign (refShifted->notes.size(), 0);
         if (refShifted->clusterMatchedCounts.size() != refShifted->clusters.size())
             refShifted->clusterMatchedCounts.assign (refShifted->clusters.size(), 0);
-    }
 
+        std::atomic_store (&referenceDisplayDataShifted, buildReferenceDisplayData (*refShifted));
+    }
+    updateUiTimelineState();
 }
 
 void PluginProcessor::releaseResources()
@@ -775,16 +837,17 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 if (! isMuted)
                     outputNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
 
+                const int channel = (data[0] & 0x0F) + 1;
+                int refIndex = -1;
                 int referenceVelocityForStats = -1;
 
-    if (hasReference)
-    {
-        const int channel = (data[0] & 0x0F) + 1;
-        const int refIndex = matchReferenceNoteInCluster (static_cast<int> (data[1]),
-            channel,
-            pitchTolerance,
-            *reference,
-            maxLookaheadClusters);
+                if (hasReference)
+                {
+                    refIndex = matchReferenceNoteInCluster (static_cast<int> (data[1]),
+                        channel,
+                        pitchTolerance,
+                        *reference,
+                        maxLookaheadClusters);
                     if (refIndex >= 0)
                     {
                         matchedNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
@@ -810,16 +873,17 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     }
                 }
 
+                pushUiNoteEvent (userSample, static_cast<int> (data[1]), channel, refIndex, true);
                 updateVelocityStats (data[2], referenceVelocityForStats);
             }
             else if (status == 0x80 || (status == 0x90 && data[2] == 0))
             {
                 lastNoteOffDeltaMs.store (0.0f, std::memory_order_relaxed);
+                const int channel = (data[0] & 0x0F) + 1;
+                int refIndex = -1;
                 if (hasReference)
-                {
-                    const int channel = (data[0] & 0x0F) + 1;
-                    removeOldestActiveNote (static_cast<int> (data[1]), channel);
-                }
+                    refIndex = removeOldestActiveNote (static_cast<int> (data[1]), channel);
+                pushUiNoteEvent (userSample, static_cast<int> (data[1]), channel, refIndex, false);
             }
         }
 
@@ -830,6 +894,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         lastHostSample = hostSample;
         transportWasPlaying = isPlaying;
         updateCpuLoad();
+        updateUiTimelineState();
         return;
     }
 
@@ -892,6 +957,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 inputNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
                 int refIndex = -1;
                 const ReferenceNote* refNote = nullptr;
+                bool shouldDropNote = false;
 
                 if (hasReference)
                 {
@@ -933,12 +999,18 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                             ++extraNoteStreak;
                             if (clampedExtraNoteBudget > 0 && extraNoteStreak >= clampedExtraNoteBudget)
                                 markCurrentClusterMissing (*reference);
-                            continue;
+                            shouldDropNote = true;
                         }
-
-                        handleClusterMiss (*reference);
+                        else
+                        {
+                            handleClusterMiss (*reference);
+                        }
                     }
                 }
+
+                pushUiNoteEvent (userSample, static_cast<int> (data[1]), channel, refIndex, true);
+                if (shouldDropNote)
+                    continue;
 
                 const uint64_t alignedRefSample = (refNote != nullptr && refNote->onSample >= referenceStartSample)
                     ? referenceTransportStartSample + (refNote->onSample - referenceStartSample)
@@ -977,7 +1049,9 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 
                 if (hasReference)
                     refIndex = removeOldestActiveNote (static_cast<int> (data[1]), channel);
-                if (hasReference && dropExtraNotes && refIndex < 0)
+                const bool shouldDropNote = hasReference && dropExtraNotes && refIndex < 0;
+                pushUiNoteEvent (userSample, static_cast<int> (data[1]), channel, refIndex, false);
+                if (shouldDropNote)
                     continue;
 
                 const ReferenceNote* refNote = (refIndex >= 0 && refIndex < static_cast<int> (reference->notes.size()))
@@ -1052,6 +1126,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     lastHostSample = hostSample;
     transportWasPlaying = isPlaying;
     updateCpuLoad();
+    updateUiTimelineState();
 }
 
 void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
@@ -1095,6 +1170,27 @@ void PluginProcessor::updateReferenceSampleTimes (ReferenceData& data, double sa
     data.firstNoteSample = data.notes.empty() ? 0 : data.notes.front().onSample;
     data.sampleRate = sampleRate;
     data.sampleTimesValid = true;
+}
+
+std::shared_ptr<PluginProcessor::ReferenceDisplayData> PluginProcessor::buildReferenceDisplayData (
+    const ReferenceData& reference) const
+{
+    auto display = std::make_shared<ReferenceDisplayData>();
+    display->sourcePath = reference.sourcePath;
+    display->firstNoteSample = reference.firstNoteSample;
+    display->notes.reserve (reference.notes.size());
+
+    for (const auto& note : reference.notes)
+    {
+        ReferenceDisplayNote displayNote;
+        displayNote.noteNumber = note.noteNumber;
+        displayNote.channel = note.channel;
+        displayNote.onSample = note.onSample;
+        displayNote.offSample = note.offSample;
+        display->notes.push_back (displayNote);
+    }
+
+    return display;
 }
 
 std::shared_ptr<PluginProcessor::ReferenceData> PluginProcessor::buildReferenceFromFile (const juce::File& file,
@@ -1569,6 +1665,7 @@ void PluginProcessor::resetPlaybackState() noexcept
     lastNoteOffDeltaMs.store (0.0f, std::memory_order_relaxed);
     lastVelocityDelta.store (0.0f, std::memory_order_relaxed);
     resetVelocityStats();
+    uiNoteFifo.reset();
 
     if (auto ref = std::atomic_load (&referenceData))
     {
@@ -1644,6 +1741,38 @@ void PluginProcessor::clearMissLog() noexcept
 {
     missLogCount.store (0, std::memory_order_release);
     missLogOverflow.store (false, std::memory_order_relaxed);
+}
+
+void PluginProcessor::pushUiNoteEvent (uint64_t sample,
+                                       int noteNumber,
+                                       int channel,
+                                       int refIndex,
+                                       bool isNoteOn) noexcept
+{
+    int start1 = 0;
+    int size1 = 0;
+    int start2 = 0;
+    int size2 = 0;
+    uiNoteFifo.prepareToWrite (1, start1, size1, start2, size2);
+
+    if (size1 > 0)
+    {
+        uiNoteEvents[static_cast<size_t> (start1)] = { sample, noteNumber, channel, refIndex, isNoteOn };
+    }
+    else if (size2 > 0)
+    {
+        uiNoteEvents[static_cast<size_t> (start2)] = { sample, noteNumber, channel, refIndex, isNoteOn };
+    }
+
+    uiNoteFifo.finishedWrite (size1 + size2);
+}
+
+void PluginProcessor::updateUiTimelineState() noexcept
+{
+    timelineSampleForUi.store (timelineSample, std::memory_order_relaxed);
+    referenceTransportStartSampleForUi.store (referenceTransportStartSample, std::memory_order_relaxed);
+    sampleRateForUi.store (sampleRateHz, std::memory_order_relaxed);
+    tempoShiftModeForUi.store (tempoShiftMode, std::memory_order_relaxed);
 }
 
 void PluginProcessor::logMiss (int noteNumber,

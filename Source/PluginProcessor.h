@@ -65,6 +65,35 @@ public:
     bool rebuildReferenceClusters (float clusterWindowMs, juce::String& errorMessage);
     void requestStartOffsetReset() noexcept;
     bool resetToDefaults (juce::String& errorMessage);
+    struct UiNoteEvent
+    {
+        uint64_t sample = 0;
+        int noteNumber = 0;
+        int channel = 1;
+        int refIndex = -1;
+        bool isNoteOn = false;
+    };
+
+    struct ReferenceDisplayNote
+    {
+        int noteNumber = 0;
+        int channel = 1;
+        uint64_t onSample = 0;
+        uint64_t offSample = 0;
+    };
+
+    struct ReferenceDisplayData
+    {
+        juce::String sourcePath;
+        std::vector<ReferenceDisplayNote> notes;
+        uint64_t firstNoteSample = 0;
+    };
+
+    int popUiNoteEvents (std::vector<UiNoteEvent>& dest, int maxEvents);
+    uint64_t getTimelineSampleForUi() const noexcept;
+    uint64_t getReferenceTransportStartSampleForUi() const noexcept;
+    double getSampleRateForUi() const noexcept;
+    std::shared_ptr<const ReferenceDisplayData> getReferenceDisplayDataForUi() const noexcept;
 
     // Parameters
     juce::AudioProcessorValueTreeState apvts;
@@ -157,6 +186,7 @@ private:
     static constexpr uint32_t kMaxMissLogEntries = 4096;
     static constexpr int kMaxClusterMissStreak = 4;
     static constexpr int kMaxClusterLookahead = 24;
+    static constexpr int kMaxUiNoteEvents = 4096;
     static constexpr float kVelocityEmaAlpha = 0.05f;
 
     void insertScheduledEvent (const ScheduledMidiEvent& event) noexcept;
@@ -179,6 +209,13 @@ private:
     float getVelocityScale() const noexcept;
     uint8_t scaleReferenceVelocity (uint8_t referenceVelocity) const noexcept;
     void clearMissLog() noexcept;
+    void pushUiNoteEvent (uint64_t sample,
+                          int noteNumber,
+                          int channel,
+                          int refIndex,
+                          bool isNoteOn) noexcept;
+    std::shared_ptr<ReferenceDisplayData> buildReferenceDisplayData (const ReferenceData& reference) const;
+    void updateUiTimelineState() noexcept;
     void logMiss (int noteNumber,
                   int velocity,
                   int channel,
@@ -195,6 +232,12 @@ private:
     uint64_t orderCounter = 0;
     uint64_t latchedSlackSamples = 0;
     uint64_t referenceTransportStartSample = 0;
+    std::array<UiNoteEvent, kMaxUiNoteEvents> uiNoteEvents {};
+    juce::AbstractFifo uiNoteFifo { kMaxUiNoteEvents };
+    std::atomic<uint64_t> timelineSampleForUi { 0 };
+    std::atomic<uint64_t> referenceTransportStartSampleForUi { 0 };
+    std::atomic<double> sampleRateForUi { 44100.0 };
+    std::atomic<int> tempoShiftModeForUi { 0 };
     double sampleRateHz = 44100.0;
     std::atomic<float>* delayMsParam = nullptr;
     std::atomic<float>* clusterWindowMsParam = nullptr;
@@ -218,6 +261,8 @@ private:
     std::atomic<float> referenceBpm { -1.0f };
     std::shared_ptr<ReferenceData> referenceData;
     std::shared_ptr<ReferenceData> referenceDataShifted;
+    std::shared_ptr<ReferenceDisplayData> referenceDisplayData;
+    std::shared_ptr<ReferenceDisplayData> referenceDisplayDataShifted;
     std::array<ActiveNote, kMaxActiveNotes> activeNotes {};
     int activeNoteCount = 0;
     int referenceClusterCursor = 0;

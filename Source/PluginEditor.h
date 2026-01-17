@@ -77,6 +77,44 @@ private:
         void paint (juce::Graphics&) override;
     };
 
+    class PianoRollComponent final : public juce::Component
+    {
+    public:
+        void paint (juce::Graphics&) override;
+        void setReferenceData (std::shared_ptr<const PluginProcessor::ReferenceDisplayData> data);
+        void addUiEvents (const std::vector<PluginProcessor::UiNoteEvent>& events);
+        void setTimeline (uint64_t nowSample, uint64_t referenceStartSample, double sampleRate);
+        void reset();
+
+    private:
+        struct UserNote
+        {
+            int noteNumber = 0;
+            int channel = 1;
+            int refIndex = -1;
+            uint64_t onSample = 0;
+            uint64_t offSample = 0;
+            uint64_t order = 0;
+            bool isActive = false;
+            bool matched = false;
+        };
+
+        void rebuildPitchRange();
+        void pruneOldNotes();
+
+        std::shared_ptr<const PluginProcessor::ReferenceDisplayData> referenceData;
+        std::vector<UserNote> userNotes;
+        std::vector<uint8_t> referenceMatched;
+        uint64_t nowSample = 0;
+        uint64_t referenceTransportStartSample = 0;
+        uint64_t lastNowSample = 0;
+        uint64_t orderCounter = 0;
+        double sampleRate = 44100.0;
+        int minNote = 0;
+        int maxNote = 127;
+        bool hasPitchRange = false;
+    };
+
     class ExpandButton final : public juce::Button
     {
     public:
@@ -180,6 +218,7 @@ private:
     juce::GroupComponent developerBox;
     CorrectionDisplay correctionDisplay;
     DeveloperPanelBackdrop developerPanelBackdrop;
+    PianoRollComponent pianoRoll;
 
     InfluenceSliderLookAndFeel influenceSliderLookAndFeel;
     juce::Slider slackSlider;
@@ -279,6 +318,7 @@ private:
     float lastStartOffsetMs = 0.0f;
     float lastStartOffsetBars = 0.0f;
     bool lastStartOffsetValid = false;
+    std::vector<PluginProcessor::UiNoteEvent> uiNoteEvents;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)
 };

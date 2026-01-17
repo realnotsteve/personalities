@@ -2,6 +2,7 @@
 #include "BinaryData.h"
 #include "PersonalitiesBuildInfo.h"
 #include <cmath>
+#include <utility>
 
 namespace
 {
@@ -34,6 +35,10 @@ namespace
     constexpr int kDeveloperConsoleY = 336;
     constexpr int kDeveloperConsoleW = 824;
     constexpr int kDeveloperConsoleH = 526;
+    constexpr int kPianoRollX = 82;
+    constexpr int kPianoRollY = 336;
+    constexpr int kPianoRollW = 386;
+    constexpr int kPianoRollH = 322;
     constexpr int kDeveloperConsolePadding = 20;
     constexpr int kBuildInfoX = 602;
     constexpr int kBuildInfoY = 160;
@@ -375,6 +380,266 @@ void PluginEditor::DeveloperPanelBackdrop::paint (juce::Graphics& g)
     g.drawRoundedRectangle (bounds.reduced (0.5f), 12.0f, 1.0f);
 }
 
+void PluginEditor::PianoRollComponent::paint (juce::Graphics& g)
+{
+    if (! referenceData || referenceData->notes.empty() || ! hasPitchRange || sampleRate <= 0.0)
+        return;
+
+    const auto bounds = getLocalBounds().toFloat();
+    g.reduceClipRegion (getLocalBounds());
+
+    constexpr double windowSeconds = 5.0;
+    const double windowSamples = sampleRate * windowSeconds;
+    if (windowSamples <= 0.0)
+        return;
+
+    const double windowStartSample = static_cast<double> (nowSample) - windowSamples * 0.5;
+    const int pitchSpan = juce::jmax (1, maxNote - minNote);
+    const float noteHeight = bounds.getHeight() / static_cast<float> (pitchSpan + 1);
+
+    auto sampleToX = [&](double sample)
+    {
+        const double normalised = (sample - windowStartSample) / windowSamples;
+        return bounds.getX() + static_cast<float> (normalised * bounds.getWidth());
+    };
+
+    auto makeNoteRect = [&](int noteNumber, double startSample, double endSample)
+    {
+        const int clampedNote = juce::jlimit (minNote, maxNote, noteNumber);
+        const int index = clampedNote - minNote;
+        const float y = bounds.getBottom() - static_cast<float> (index + 1) * noteHeight;
+        float x1 = sampleToX (startSample);
+        float x2 = sampleToX (endSample);
+        if (x2 < x1)
+            std::swap (x1, x2);
+        auto rect = juce::Rectangle<float> (x1, y, x2 - x1, noteHeight);
+        if (rect.getWidth() < 1.0f)
+            rect.setWidth (1.0f);
+        return rect.getIntersection (bounds);
+    };
+
+    const juce::Colour referenceColour (0xffff6fa3);
+    const juce::Colour userColour (0xff4dd1ff);
+    const juce::Colour overlapColour (0xff555ed2);
+
+    for (size_t i = 0; i < referenceData->notes.size(); ++i)
+    {
+        const auto& note = referenceData->notes[i];
+        const double alignedOn = static_cast<double> (referenceTransportStartSample)
+            + static_cast<double> (note.onSample)
+            - static_cast<double> (referenceData->firstNoteSample);
+        const double alignedOff = static_cast<double> (referenceTransportStartSample)
+            + static_cast<double> (note.offSample)
+            - static_cast<double> (referenceData->firstNoteSample);
+        const auto rect = makeNoteRect (note.noteNumber, alignedOn, alignedOff);
+        if (rect.isEmpty())
+            continue;
+
+        const bool matched = (i < referenceMatched.size()) && (referenceMatched[i] != 0);
+        g.setColour (referenceColour);
+        if (matched)
+            g.fillRect (rect);
+        else
+            g.drawRect (rect, 1.0f);
+    }
+
+    for (const auto& note : userNotes)
+    {
+        const double offSample = note.isActive ? static_cast<double> (nowSample)
+            : static_cast<double> (note.offSample);
+        const auto rect = makeNoteRect (note.noteNumber,
+            static_cast<double> (note.onSample),
+            offSample);
+        if (rect.isEmpty())
+            continue;
+
+        g.setColour (userColour);
+        if (note.matched)
+            g.fillRect (rect);
+        else
+            g.drawRect (rect, 1.0f);
+    }
+
+    for (const auto& note : userNotes)
+    {
+        if (! note.matched || note.refIndex < 0 || ! referenceData)
+            continue;
+        if (! juce::isPositiveAndBelow (note.refIndex, static_cast<int> (referenceData->notes.size())))
+            continue;
+
+        const auto& refNote = referenceData->notes[static_cast<size_t> (note.refIndex)];
+        const double alignedOn = static_cast<double> (referenceTransportStartSample)
+            + static_cast<double> (refNote.onSample)
+            - static_cast<double> (referenceData->firstNoteSample);
+        const double alignedOff = static_cast<double> (referenceTransportStartSample)
+            + static_cast<double> (refNote.offSample)
+            - static_cast<double> (referenceData->firstNoteSample);
+        const auto refRect = makeNoteRect (refNote.noteNumber, alignedOn, alignedOff);
+        const double userOff = note.isActive ? static_cast<double> (nowSample)
+            : static_cast<double> (note.offSample);
+        const auto userRect = makeNoteRect (note.noteNumber,
+            static_cast<double> (note.onSample),
+            userOff);
+        const auto overlap = refRect.getIntersection (userRect);
+        if (overlap.isEmpty())
+            continue;
+
+        g.setColour (overlapColour);
+        g.fillRect (overlap);
+    }
+}
+
+void PluginEditor::PianoRollComponent::setReferenceData (
+    std::shared_ptr<const PluginProcessor::ReferenceDisplayData> data)
+{
+    if (referenceData == data)
+        return;
+
+    referenceData = std::move (data);
+    referenceMatched.clear();
+    userNotes.clear();
+    orderCounter = 0;
+    if (referenceData)
+        referenceMatched.assign (referenceData->notes.size(), 0);
+    rebuildPitchRange();
+    repaint();
+}
+
+void PluginEditor::PianoRollComponent::addUiEvents (const std::vector<PluginProcessor::UiNoteEvent>& events)
+{
+    if (events.empty())
+        return;
+
+    for (const auto& event : events)
+    {
+        if (event.isNoteOn)
+        {
+            UserNote note;
+            note.noteNumber = event.noteNumber;
+            note.channel = event.channel;
+            note.refIndex = event.refIndex;
+            note.onSample = event.sample;
+            note.offSample = event.sample;
+            note.order = orderCounter++;
+            note.isActive = true;
+            note.matched = event.refIndex >= 0;
+            userNotes.push_back (note);
+
+            if (note.refIndex >= 0
+                && juce::isPositiveAndBelow (note.refIndex, static_cast<int> (referenceMatched.size())))
+            {
+                referenceMatched[static_cast<size_t> (note.refIndex)] = 1;
+            }
+        }
+        else
+        {
+            int matchIndex = -1;
+            uint64_t oldestOrder = 0;
+            for (size_t i = 0; i < userNotes.size(); ++i)
+            {
+                const auto& candidate = userNotes[i];
+                if (! candidate.isActive)
+                    continue;
+                if (candidate.noteNumber != event.noteNumber || candidate.channel != event.channel)
+                    continue;
+
+                if (matchIndex < 0 || candidate.order < oldestOrder)
+                {
+                    matchIndex = static_cast<int> (i);
+                    oldestOrder = candidate.order;
+                }
+            }
+
+            if (matchIndex >= 0)
+            {
+                auto& note = userNotes[static_cast<size_t> (matchIndex)];
+                note.isActive = false;
+                note.offSample = event.sample;
+            }
+        }
+    }
+
+    pruneOldNotes();
+    repaint();
+}
+
+void PluginEditor::PianoRollComponent::setTimeline (uint64_t nowSampleIn,
+                                                    uint64_t referenceStartSampleIn,
+                                                    double sampleRateIn)
+{
+    const bool sampleRateChanged = sampleRateIn > 0.0 && std::abs (sampleRateIn - sampleRate) > 0.01;
+    const bool timeReset = nowSampleIn + 1 < lastNowSample;
+
+    if (sampleRateIn > 0.0)
+        sampleRate = sampleRateIn;
+
+    nowSample = nowSampleIn;
+    referenceTransportStartSample = referenceStartSampleIn;
+
+    if (sampleRateChanged || timeReset)
+        reset();
+
+    lastNowSample = nowSample;
+    pruneOldNotes();
+}
+
+void PluginEditor::PianoRollComponent::reset()
+{
+    userNotes.clear();
+    orderCounter = 0;
+    if (referenceData)
+        referenceMatched.assign (referenceData->notes.size(), 0);
+    else
+        referenceMatched.clear();
+    repaint();
+}
+
+void PluginEditor::PianoRollComponent::rebuildPitchRange()
+{
+    hasPitchRange = false;
+    minNote = 0;
+    maxNote = 127;
+
+    if (! referenceData || referenceData->notes.empty())
+        return;
+
+    minNote = 127;
+    maxNote = 0;
+    for (const auto& note : referenceData->notes)
+    {
+        minNote = juce::jmin (minNote, note.noteNumber);
+        maxNote = juce::jmax (maxNote, note.noteNumber);
+    }
+
+    if (minNote <= maxNote)
+        hasPitchRange = true;
+}
+
+void PluginEditor::PianoRollComponent::pruneOldNotes()
+{
+    if (sampleRate <= 0.0)
+        return;
+
+    constexpr double windowSeconds = 5.0;
+    const uint64_t halfWindowSamples = static_cast<uint64_t> (std::llround (sampleRate * windowSeconds * 0.5));
+    const uint64_t earliestSample = nowSample > halfWindowSamples
+        ? nowSample - halfWindowSamples
+        : 0;
+
+    size_t writeIndex = 0;
+    for (size_t i = 0; i < userNotes.size(); ++i)
+    {
+        const auto& note = userNotes[i];
+        if (note.isActive || note.offSample >= earliestSample)
+        {
+            userNotes[writeIndex++] = note;
+        }
+    }
+
+    if (writeIndex < userNotes.size())
+        userNotes.resize (writeIndex);
+}
+
 void PluginEditor::ExpandButton::paintButton (juce::Graphics& g,
                                               bool shouldDrawButtonAsHighlighted,
                                               bool shouldDrawButtonAsDown)
@@ -682,6 +947,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     addAndMakeVisible (developerPanelBackdrop);
 
     addAndMakeVisible (correctionDisplay);
+    pianoRoll.setInterceptsMouseClicks (false, false);
+    addAndMakeVisible (pianoRoll);
 
     referenceBox.setComponentID ("performerDropdown");
     referenceBox.setLookAndFeel (&dropdownLookAndFeel);
@@ -1240,6 +1507,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     drawBounds (referenceBox, "referenceBox");
     drawBounds (correctionSlider, "correctionSlider");
     drawBounds (correctionDisplay, "correctionDisplay");
+    drawBounds (pianoRoll, "pianoRoll");
     drawBounds (developerPanelBackdrop, "developerPanelBackdrop");
     drawBounds (expandButton, "expandButton");
     drawBounds (slackSlider, "slackSlider");
@@ -1418,6 +1686,7 @@ void PluginEditor::resized()
 
     correctionDisplay.setBounds (scaleRect (rightPanelX + 16, rightPanelY + 12,
         rightPanelW - 32, rightPanelH - 24));
+    pianoRoll.setBounds (assetRect (kPianoRollX, kPianoRollY, kPianoRollW, kPianoRollH));
 
     const auto devPanelBounds = assetRect (kDeveloperConsoleX, kDeveloperConsoleY,
         kDeveloperConsoleW, kDeveloperConsoleH);
@@ -1550,6 +1819,7 @@ void PluginEditor::updateUiVisibility()
     referenceBox.setVisible (isExpanded);
     correctionSlider.setVisible (isExpanded);
     correctionDisplay.setVisible (isExpanded && ! showDeveloperConsole);
+    pianoRoll.setVisible (isExpanded && ! showDeveloperConsole);
 
     referenceLabel.setVisible (false);
     correctionLabel.setVisible (false);
@@ -1750,6 +2020,8 @@ void PluginEditor::resetPluginState()
     modeBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
 
     tooltipsCheckbox.setToggleState (false, juce::dontSendNotification);
+    pianoRoll.setReferenceData (processor.getReferenceDisplayDataForUi());
+    pianoRoll.reset();
 
     lastInputNoteOnCounter = processor.getInputNoteOnCounter();
     lastOutputNoteOnCounter = processor.getOutputNoteOnCounter();
@@ -1769,6 +2041,15 @@ void PluginEditor::timerCallback()
 {
     const auto nowMs = juce::Time::getMillisecondCounterHiRes();
     updateDeveloperModeFade (nowMs);
+
+    pianoRoll.setReferenceData (processor.getReferenceDisplayDataForUi());
+    pianoRoll.setTimeline (processor.getTimelineSampleForUi(),
+        processor.getReferenceTransportStartSampleForUi(),
+        processor.getSampleRateForUi());
+    processor.popUiNoteEvents (uiNoteEvents, 512);
+    pianoRoll.addUiEvents (uiNoteEvents);
+    if (pianoRoll.isVisible())
+        pianoRoll.repaint();
 
     const auto inputCounter = processor.getInputNoteOnCounter();
     if (inputCounter != lastInputNoteOnCounter)
