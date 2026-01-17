@@ -204,6 +204,10 @@ private:
     void setDeveloperConsoleOpen (bool shouldBeOpen);
     void updateDeveloperModeFade (double nowMs);
     void updateDeveloperOverlayComponents();
+    void configureNumberEntry (juce::Label& label);
+    void commitNumberEntry (juce::Label& label, const char* paramId);
+    void syncNumberEntry (juce::Label& label, const char* paramId);
+    void applyClusterWindowFromUi();
     bool handleDeveloperShortcut (const juce::KeyPress& key);
 
     PluginProcessor& processor;
@@ -222,21 +226,21 @@ private:
     juce::GroupComponent developerBox;
     CorrectionDisplay correctionDisplay;
     DeveloperPanelBackdrop developerPanelBackdrop;
-    PianoRollComponent pianoRoll;
+    PianoRollComponent advancedUserOptions;
 
     InfluenceSliderLookAndFeel influenceSliderLookAndFeel;
-    juce::Slider slackSlider;
-    juce::Label  slackLabel;
-    juce::Slider clusterWindowSlider;
-    juce::Label  clusterWindowLabel;
+    juce::Label slackLabel;
+    juce::Label slackEntry;
+    juce::Label clusterWindowLabel;
+    juce::Label clusterWindowEntry;
     juce::Slider correctionSlider;
-    juce::Label  correctionLabel;
-    juce::Slider missingTimeoutSlider;
-    juce::Label  missingTimeoutLabel;
-    juce::Slider extraNoteBudgetSlider;
-    juce::Label  extraNoteBudgetLabel;
-    juce::Slider pitchToleranceSlider;
-    juce::Label  pitchToleranceLabel;
+    juce::Label correctionLabel;
+    juce::Label missingTimeoutLabel;
+    juce::Label missingTimeoutEntry;
+    juce::Label extraNoteBudgetLabel;
+    juce::Label extraNoteBudgetEntry;
+    juce::Label pitchToleranceLabel;
+    juce::Label pitchToleranceEntry;
     juce::Label buildInfoLabel;
     ImageIndicator inputIndicator;
     ImageIndicator outputIndicator;
@@ -292,12 +296,7 @@ private:
     float developerModeTargetAlpha = 0.0f;
     double lastDeveloperFadeMs = 0.0;
 
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> slackAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> clusterWindowAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> correctionAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> missingTimeoutAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> extraNoteBudgetAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> pitchToleranceAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> velocityAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> muteAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bypassAttachment;
@@ -307,6 +306,7 @@ private:
     uint32_t lastOutputNoteOnCounter = 0;
     double lastOutputFlashMs = 0.0;
     float lastTimingDeltaMs = 0.0f;
+    float lastClusterWindowMs = -1.0f;
     uint32_t lastMatchedNoteOnCounter = 0;
     uint32_t lastMissedNoteOnCounter = 0;
     bool lastTransportPlaying = false;

@@ -1,7 +1,9 @@
 #include "PluginEditor.h"
 #include "BinaryData.h"
 #include "PersonalitiesBuildInfo.h"
+#include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <utility>
 
 namespace
@@ -85,6 +87,32 @@ namespace
         juce::GlyphArrangement glyphs;
         glyphs.addLineOfText (font, text, 0.0f, 0.0f);
         return static_cast<int> (std::ceil (glyphs.getBoundingBox (0, -1, true).getWidth()));
+    }
+
+    bool tryParseFloat (const juce::String& text, float& value)
+    {
+        const auto trimmed = text.trim();
+        if (trimmed.isEmpty())
+            return false;
+
+        const auto* raw = trimmed.toRawUTF8();
+        char* end = nullptr;
+        const double parsed = std::strtod (raw, &end);
+        if (end == raw)
+            return false;
+
+        while (*end != '\0')
+        {
+            if (! std::isspace (static_cast<unsigned char> (*end)))
+                return false;
+            ++end;
+        }
+
+        if (! std::isfinite (parsed))
+            return false;
+
+        value = static_cast<float> (parsed);
+        return true;
     }
 }
 
@@ -998,8 +1026,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     addAndMakeVisible (developerPanelBackdrop);
 
     addAndMakeVisible (correctionDisplay);
-    pianoRoll.setInterceptsMouseClicks (false, false);
-    addAndMakeVisible (pianoRoll);
+    advancedUserOptions.setInterceptsMouseClicks (false, false);
+    addAndMakeVisible (advancedUserOptions);
 
     referenceBox.setComponentID ("performerDropdown");
     referenceBox.setLookAndFeel (&dropdownLookAndFeel);
@@ -1084,18 +1112,19 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     slackLabel.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (slackLabel);
 
-    slackSlider.setSliderStyle (juce::Slider::IncDecButtons);
-    slackSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 18);
-    addAndMakeVisible (slackSlider);
+    configureNumberEntry (slackEntry);
+    slackEntry.onTextChange = [this]()
+    {
+        commitNumberEntry (slackEntry, kParamDelayMs);
+    };
+    addAndMakeVisible (slackEntry);
 
     clusterWindowLabel.setText ("Cluster Window (ms)", juce::dontSendNotification);
     clusterWindowLabel.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (clusterWindowLabel);
 
-    clusterWindowSlider.setSliderStyle (juce::Slider::IncDecButtons);
-    clusterWindowSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 70, 20);
-    clusterWindowSlider.setRange (20.0, 1000.0, 1.0);
-    addAndMakeVisible (clusterWindowSlider);
+    configureNumberEntry (clusterWindowEntry);
+    addAndMakeVisible (clusterWindowEntry);
 
     correctionLabel.setText ("Influence", juce::dontSendNotification);
     correctionLabel.setJustificationType (juce::Justification::centredLeft);
@@ -1119,36 +1148,34 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     missingTimeoutLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (missingTimeoutLabel);
 
-    missingTimeoutSlider.setSliderStyle (juce::Slider::IncDecButtons);
-    missingTimeoutSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 18);
-    missingTimeoutSlider.setRange (0.0, 2000.0, 1.0);
-    addAndMakeVisible (missingTimeoutSlider);
+    configureNumberEntry (missingTimeoutEntry);
+    missingTimeoutEntry.onTextChange = [this]()
+    {
+        commitNumberEntry (missingTimeoutEntry, kParamMissingTimeoutMs);
+    };
+    addAndMakeVisible (missingTimeoutEntry);
 
     extraNoteBudgetLabel.setText ("Extra Note Budget", juce::dontSendNotification);
     extraNoteBudgetLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (extraNoteBudgetLabel);
 
-    extraNoteBudgetSlider.setSliderStyle (juce::Slider::IncDecButtons);
-    extraNoteBudgetSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 50, 18);
-    extraNoteBudgetSlider.setRange (0.0, 32.0, 1.0);
-    extraNoteBudgetSlider.textFromValueFunction = [] (double value)
+    configureNumberEntry (extraNoteBudgetEntry);
+    extraNoteBudgetEntry.onTextChange = [this]()
     {
-        return juce::String (static_cast<int> (std::lround (value)));
+        commitNumberEntry (extraNoteBudgetEntry, kParamExtraNoteBudget);
     };
-    addAndMakeVisible (extraNoteBudgetSlider);
+    addAndMakeVisible (extraNoteBudgetEntry);
 
     pitchToleranceLabel.setText ("Pitch Tolerance (st)", juce::dontSendNotification);
     pitchToleranceLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (pitchToleranceLabel);
 
-    pitchToleranceSlider.setSliderStyle (juce::Slider::IncDecButtons);
-    pitchToleranceSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 50, 18);
-    pitchToleranceSlider.setRange (0.0, 12.0, 1.0);
-    pitchToleranceSlider.textFromValueFunction = [] (double value)
+    configureNumberEntry (pitchToleranceEntry);
+    pitchToleranceEntry.onTextChange = [this]()
     {
-        return juce::String (static_cast<int> (std::lround (value)));
+        commitNumberEntry (pitchToleranceEntry, kParamPitchTolerance);
     };
-    addAndMakeVisible (pitchToleranceSlider);
+    addAndMakeVisible (pitchToleranceEntry);
 
     inputIndicator.setImages (midiInActiveImage, midiInInactiveImage);
     outputIndicator.setImages (midiOutActiveImage, midiOutInactiveImage);
@@ -1265,18 +1292,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     expandButton.setExpanded (isExpanded);
     addAndMakeVisible (expandButton);
 
-    slackAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        processor.apvts, kParamDelayMs, slackSlider);
-    clusterWindowAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        processor.apvts, kParamClusterWindowMs, clusterWindowSlider);
     correctionAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         processor.apvts, kParamCorrection, correctionSlider);
-    missingTimeoutAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        processor.apvts, kParamMissingTimeoutMs, missingTimeoutSlider);
-    extraNoteBudgetAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        processor.apvts, kParamExtraNoteBudget, extraNoteBudgetSlider);
-    pitchToleranceAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        processor.apvts, kParamPitchTolerance, pitchToleranceSlider);
     velocityAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor.apvts, kParamVelocityCorrection, velocityButton);
     muteAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -1284,41 +1301,21 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     bypassAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor.apvts, kParamBypass, bypassButton);
 
-    auto applyClusterWindow = [this]
+    clusterWindowEntry.onTextChange = [this]
     {
-        if (processor.isTransportPlaying())
-        {
-            referenceStatusLabel.setText ("Stop transport to update cluster window.",
-                juce::dontSendNotification);
-            return;
-        }
-
-        if (processor.getReferencePath().isEmpty())
-        {
-            referenceStatusLabel.setText ("Load a personality to update cluster window.",
-                juce::dontSendNotification);
-            return;
-        }
-
-        juce::String errorMessage;
-        if (processor.rebuildReferenceClusters (static_cast<float> (clusterWindowSlider.getValue()), errorMessage))
-        {
-            referenceStatusLabel.setText ("Cluster window updated.",
-                juce::dontSendNotification);
-        }
-        else
-        {
-            referenceStatusLabel.setText ("Cluster update failed: " + errorMessage,
-                juce::dontSendNotification);
-        }
+        commitNumberEntry (clusterWindowEntry, kParamClusterWindowMs);
+        if (auto* value = processor.apvts.getRawParameterValue (kParamClusterWindowMs))
+            lastClusterWindowMs = value->load();
+        applyClusterWindowFromUi();
     };
 
-    clusterWindowSlider.onDragEnd = applyClusterWindow;
-    clusterWindowSlider.onValueChange = [this, applyClusterWindow]
-    {
-        if (! clusterWindowSlider.isMouseButtonDown())
-            applyClusterWindow();
-    };
+    syncNumberEntry (slackEntry, kParamDelayMs);
+    syncNumberEntry (clusterWindowEntry, kParamClusterWindowMs);
+    syncNumberEntry (missingTimeoutEntry, kParamMissingTimeoutMs);
+    syncNumberEntry (extraNoteBudgetEntry, kParamExtraNoteBudget);
+    syncNumberEntry (pitchToleranceEntry, kParamPitchTolerance);
+    if (auto* value = processor.apvts.getRawParameterValue (kParamClusterWindowMs))
+        lastClusterWindowMs = value->load();
 
     resetStartOffsetButton.onClick = [this]
     {
@@ -1418,10 +1415,10 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     resetStartOffsetButton.setEnabled (! lastTransportPlaying);
     copyLogButton.setEnabled (! lastTransportPlaying);
-    clusterWindowSlider.setEnabled (! lastTransportPlaying);
+    clusterWindowEntry.setEnabled (! lastTransportPlaying);
 
     correctionDisplay.setMinimalStyle (true);
-    pianoRoll.setDebugOverlayEnabled (boundsOverlayEnabled);
+    advancedUserOptions.setDebugOverlayEnabled (boundsOverlayEnabled);
     updateUiVisibility();
 
     tabContainer.toBack();
@@ -1540,18 +1537,18 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     drawBounds (referenceBox, "referenceBox");
     drawBounds (correctionSlider, "correctionSlider");
     drawBounds (correctionDisplay, "correctionDisplay");
-    drawBounds (pianoRoll, "pianoRoll");
+    drawBounds (advancedUserOptions, "advanced_user_options");
     drawBounds (developerPanelBackdrop, "developerPanelBackdrop");
     drawBounds (expandButton, "expandButton");
-    drawBounds (slackSlider, "slackSlider");
+    drawBounds (slackEntry, "slackEntry");
     drawBounds (slackLabel, "slackLabel");
-    drawBounds (clusterWindowSlider, "clusterWindowSlider");
+    drawBounds (clusterWindowEntry, "clusterWindowEntry");
     drawBounds (clusterWindowLabel, "clusterWindowLabel");
-    drawBounds (missingTimeoutSlider, "missingTimeoutSlider");
+    drawBounds (missingTimeoutEntry, "missingTimeoutEntry");
     drawBounds (missingTimeoutLabel, "missingTimeoutLabel");
-    drawBounds (extraNoteBudgetSlider, "extraNoteBudgetSlider");
+    drawBounds (extraNoteBudgetEntry, "extraNoteBudgetEntry");
     drawBounds (extraNoteBudgetLabel, "extraNoteBudgetLabel");
-    drawBounds (pitchToleranceSlider, "pitchToleranceSlider");
+    drawBounds (pitchToleranceEntry, "pitchToleranceEntry");
     drawBounds (pitchToleranceLabel, "pitchToleranceLabel");
     drawBounds (velocityButton, "velocityButton");
     drawBounds (resetStartOffsetButton, "resetStartOffsetButton");
@@ -1716,7 +1713,7 @@ void PluginEditor::resized()
 
     correctionDisplay.setBounds (scaleRect (rightPanelX + 16, rightPanelY + 12,
         rightPanelW - 32, rightPanelH - 24));
-    pianoRoll.setBounds (assetRect (kPianoRollX, kPianoRollY, kPianoRollW, kPianoRollH));
+    advancedUserOptions.setBounds (assetRect (kPianoRollX, kPianoRollY, kPianoRollW, kPianoRollH));
 
     const auto devPanelBounds = assetRect (kDeveloperConsoleX, kDeveloperConsoleY,
         kDeveloperConsoleW, kDeveloperConsoleH);
@@ -1742,19 +1739,19 @@ void PluginEditor::resized()
     const int leftX = contentBounds.getX();
     const int rightX = contentBounds.getX() + columnWidth + columnGap;
 
-    auto placeSliderRow = [&](juce::Label& label, juce::Slider& slider)
+    auto placeEntryRow = [&](juce::Label& label, juce::Label& entry)
     {
         label.setBounds (leftX, leftY, labelWidth, rowHeight);
-        slider.setBounds (leftX + labelWidth + sliderGap, leftY,
+        entry.setBounds (leftX + labelWidth + sliderGap, leftY,
             columnWidth - labelWidth - sliderGap, rowHeight);
         leftY += rowHeight + rowGap;
     };
 
-    placeSliderRow (slackLabel, slackSlider);
-    placeSliderRow (clusterWindowLabel, clusterWindowSlider);
-    placeSliderRow (missingTimeoutLabel, missingTimeoutSlider);
-    placeSliderRow (extraNoteBudgetLabel, extraNoteBudgetSlider);
-    placeSliderRow (pitchToleranceLabel, pitchToleranceSlider);
+    placeEntryRow (slackLabel, slackEntry);
+    placeEntryRow (clusterWindowLabel, clusterWindowEntry);
+    placeEntryRow (missingTimeoutLabel, missingTimeoutEntry);
+    placeEntryRow (extraNoteBudgetLabel, extraNoteBudgetEntry);
+    placeEntryRow (pitchToleranceLabel, pitchToleranceEntry);
 
     velocityButton.setBounds (leftX, leftY, columnWidth, rowHeight);
     leftY += rowHeight + rowGap;
@@ -1802,7 +1799,7 @@ bool PluginEditor::keyPressed (const juce::KeyPress& key)
     if (keyChar == 'b' || keyChar == 'B')
     {
         boundsOverlayEnabled = ! boundsOverlayEnabled;
-        pianoRoll.setDebugOverlayEnabled (boundsOverlayEnabled);
+        advancedUserOptions.setDebugOverlayEnabled (boundsOverlayEnabled);
         repaint();
         return true;
     }
@@ -1846,7 +1843,7 @@ void PluginEditor::updateUiVisibility()
     referenceBox.setVisible (isExpanded);
     correctionSlider.setVisible (isExpanded);
     correctionDisplay.setVisible (isExpanded && ! showDeveloperConsole);
-    pianoRoll.setVisible (isExpanded && ! showDeveloperConsole);
+    advancedUserOptions.setVisible (isExpanded && ! showDeveloperConsole);
 
     referenceLabel.setVisible (false);
     correctionLabel.setVisible (false);
@@ -1860,15 +1857,15 @@ void PluginEditor::updateUiVisibility()
 
     referenceStatusLabel.setVisible (isExpanded && showDeveloperConsole);
     slackLabel.setVisible (isExpanded && showDeveloperConsole);
-    slackSlider.setVisible (isExpanded && showDeveloperConsole);
+    slackEntry.setVisible (isExpanded && showDeveloperConsole);
     clusterWindowLabel.setVisible (isExpanded && showDeveloperConsole);
-    clusterWindowSlider.setVisible (isExpanded && showDeveloperConsole);
+    clusterWindowEntry.setVisible (isExpanded && showDeveloperConsole);
     missingTimeoutLabel.setVisible (isExpanded && showDeveloperConsole);
-    missingTimeoutSlider.setVisible (isExpanded && showDeveloperConsole);
+    missingTimeoutEntry.setVisible (isExpanded && showDeveloperConsole);
     extraNoteBudgetLabel.setVisible (isExpanded && showDeveloperConsole);
-    extraNoteBudgetSlider.setVisible (isExpanded && showDeveloperConsole);
+    extraNoteBudgetEntry.setVisible (isExpanded && showDeveloperConsole);
     pitchToleranceLabel.setVisible (isExpanded && showDeveloperConsole);
-    pitchToleranceSlider.setVisible (isExpanded && showDeveloperConsole);
+    pitchToleranceEntry.setVisible (isExpanded && showDeveloperConsole);
     velocityButton.setVisible (isExpanded && showDeveloperConsole);
     timingLabel.setVisible (isExpanded && showDeveloperConsole);
     timingValueLabel.setVisible (isExpanded && showDeveloperConsole);
@@ -1960,6 +1957,81 @@ void PluginEditor::updateDeveloperOverlayComponents()
     buildInfoLabel.setAlpha (alpha * 0.5f);
 }
 
+void PluginEditor::configureNumberEntry (juce::Label& label)
+{
+    label.setEditable (true, true, false);
+    label.setJustificationType (juce::Justification::centredRight);
+    label.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    label.setColour (juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+    label.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
+}
+
+void PluginEditor::commitNumberEntry (juce::Label& label, const char* paramId)
+{
+    auto* param = processor.apvts.getParameter (paramId);
+    if (param == nullptr)
+        return;
+
+    float value = 0.0f;
+    if (! tryParseFloat (label.getText(), value))
+    {
+        syncNumberEntry (label, paramId);
+        return;
+    }
+
+    const auto range = processor.apvts.getParameterRange (paramId);
+    const float clamped = range.snapToLegalValue (value);
+    const float normalized = range.convertTo0to1 (clamped);
+    param->beginChangeGesture();
+    param->setValueNotifyingHost (normalized);
+    param->endChangeGesture();
+    label.setText (param->getCurrentValueAsText(), juce::dontSendNotification);
+}
+
+void PluginEditor::syncNumberEntry (juce::Label& label, const char* paramId)
+{
+    if (label.isBeingEdited())
+        return;
+
+    if (auto* param = processor.apvts.getParameter (paramId))
+    {
+        const auto text = param->getCurrentValueAsText();
+        if (label.getText() != text)
+            label.setText (text, juce::dontSendNotification);
+    }
+}
+
+void PluginEditor::applyClusterWindowFromUi()
+{
+    if (processor.isTransportPlaying())
+    {
+        referenceStatusLabel.setText ("Stop transport to update cluster window.",
+            juce::dontSendNotification);
+        return;
+    }
+
+    if (processor.getReferencePath().isEmpty())
+    {
+        referenceStatusLabel.setText ("Load a personality to update cluster window.",
+            juce::dontSendNotification);
+        return;
+    }
+
+    const auto* value = processor.apvts.getRawParameterValue (kParamClusterWindowMs);
+    const float clusterWindowMs = (value != nullptr) ? value->load() : 0.0f;
+    juce::String errorMessage;
+    if (processor.rebuildReferenceClusters (clusterWindowMs, errorMessage))
+    {
+        referenceStatusLabel.setText ("Cluster window updated.",
+            juce::dontSendNotification);
+    }
+    else
+    {
+        referenceStatusLabel.setText ("Cluster update failed: " + errorMessage,
+            juce::dontSendNotification);
+    }
+}
+
 void PluginEditor::rebuildReferenceList()
 {
     referenceFiles.clear();
@@ -2044,8 +2116,8 @@ void PluginEditor::resetPluginState()
     modeBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
 
     tooltipsCheckbox.setToggleState (false, juce::dontSendNotification);
-    pianoRoll.setReferenceData (processor.getReferenceDisplayDataForUi());
-    pianoRoll.reset();
+    advancedUserOptions.setReferenceData (processor.getReferenceDisplayDataForUi());
+    advancedUserOptions.reset();
     lastUiNoteSample = 0;
 
     lastInputNoteOnCounter = processor.getInputNoteOnCounter();
@@ -2086,9 +2158,9 @@ void PluginEditor::timerCallback()
         }
     }
 
-    pianoRoll.setReferenceData (processor.getReferenceDisplayDataForUi());
+    advancedUserOptions.setReferenceData (processor.getReferenceDisplayDataForUi());
     const auto loadError = processor.getReferenceLoadError();
-    pianoRoll.setStatusMessage (loadError.isNotEmpty() ? "Load error: " + loadError : juce::String());
+    advancedUserOptions.setStatusMessage (loadError.isNotEmpty() ? "Load error: " + loadError : juce::String());
     processor.popUiNoteEvents (uiNoteEvents, 512);
     if (! uiNoteEvents.empty())
         lastUiNoteSample = uiNoteEvents.back().sample;
@@ -2106,10 +2178,10 @@ void PluginEditor::timerCallback()
         && (timelineSample - lastUiNoteSample) <= halfWindowSamples;
     const uint64_t nowSample = (transportPlaying || recentUserNote) ? timelineSample : referenceStartSample;
 
-    pianoRoll.setTimeline (nowSample, referenceStartSample, sampleRate);
-    pianoRoll.addUiEvents (uiNoteEvents);
-    if (pianoRoll.isVisible())
-        pianoRoll.repaint();
+    advancedUserOptions.setTimeline (nowSample, referenceStartSample, sampleRate);
+    advancedUserOptions.addUiEvents (uiNoteEvents);
+    if (advancedUserOptions.isVisible())
+        advancedUserOptions.repaint();
 
     const auto inputCounter = processor.getInputNoteOnCounter();
     if (inputCounter != lastInputNoteOnCounter)
@@ -2131,10 +2203,12 @@ void PluginEditor::timerCallback()
     const bool outputActive = (nowMs - lastOutputFlashMs) <= 120.0;
     outputIndicator.setActive (outputActive);
 
+    const auto* slackValue = processor.apvts.getRawParameterValue (kParamDelayMs);
+    const float slackMs = (slackValue != nullptr) ? slackValue->load() : 0.0f;
     correctionDisplay.setValues (processor.getLastTimingDeltaMs(),
         processor.getLastNoteOffDeltaMs(),
         processor.getLastVelocityDelta(),
-        static_cast<float> (slackSlider.getValue()));
+        slackMs);
 
     float deltaMs = processor.getLastTimingDeltaMs();
     if (std::abs (deltaMs) < 0.005f)
@@ -2153,7 +2227,7 @@ void PluginEditor::timerCallback()
         lastTransportPlaying = isPlaying;
         resetStartOffsetButton.setEnabled (! isPlaying);
         copyLogButton.setEnabled (! isPlaying);
-        clusterWindowSlider.setEnabled (! isPlaying);
+        clusterWindowEntry.setEnabled (! isPlaying);
     }
 
     const auto matched = processor.getMatchedNoteOnCounter();
@@ -2233,4 +2307,19 @@ void PluginEditor::timerCallback()
                 juce::dontSendNotification);
         }
     }
+
+    const auto* clusterValue = processor.apvts.getRawParameterValue (kParamClusterWindowMs);
+    const float clusterWindowMs = (clusterValue != nullptr) ? clusterValue->load() : 0.0f;
+    if (! clusterWindowEntry.isBeingEdited()
+        && std::abs (clusterWindowMs - lastClusterWindowMs) > 0.5f)
+    {
+        lastClusterWindowMs = clusterWindowMs;
+        applyClusterWindowFromUi();
+    }
+
+    syncNumberEntry (slackEntry, kParamDelayMs);
+    syncNumberEntry (clusterWindowEntry, kParamClusterWindowMs);
+    syncNumberEntry (missingTimeoutEntry, kParamMissingTimeoutMs);
+    syncNumberEntry (extraNoteBudgetEntry, kParamExtraNoteBudget);
+    syncNumberEntry (pitchToleranceEntry, kParamPitchTolerance);
 }
