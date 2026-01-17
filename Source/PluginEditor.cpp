@@ -382,10 +382,44 @@ void PluginEditor::DeveloperPanelBackdrop::paint (juce::Graphics& g)
 
 void PluginEditor::PianoRollComponent::paint (juce::Graphics& g)
 {
+    const auto bounds = getLocalBounds().toFloat();
+    if (bounds.isEmpty())
+        return;
+
+    if (debugOverlayEnabled)
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.15f));
+        g.drawRect (bounds, 1.0f);
+        g.setFont (makeDisplayFont (9.0f));
+        juce::String info;
+        if (statusMessage.isNotEmpty())
+        {
+            info = statusMessage;
+        }
+        else if (! referenceData)
+        {
+            info = "No reference data";
+        }
+        else if (referenceData->notes.empty())
+        {
+            info = "Reference notes: 0";
+        }
+        else if (hasPitchRange)
+        {
+            info = "Notes: " + juce::String (static_cast<int> (referenceData->notes.size()))
+                + " Range: " + juce::String (minNote) + "-" + juce::String (maxNote);
+        }
+        else
+        {
+            info = "Reference range unavailable";
+        }
+        g.setColour (juce::Colours::white.withAlpha (0.6f));
+        g.drawText (info, bounds.reduced (4.0f), juce::Justification::topLeft, false);
+    }
+
     if (! referenceData || referenceData->notes.empty() || ! hasPitchRange || sampleRate <= 0.0)
         return;
 
-    const auto bounds = getLocalBounds().toFloat();
     g.reduceClipRegion (getLocalBounds());
 
     constexpr double windowSeconds = 5.0;
@@ -591,6 +625,24 @@ void PluginEditor::PianoRollComponent::reset()
         referenceMatched.assign (referenceData->notes.size(), 0);
     else
         referenceMatched.clear();
+    repaint();
+}
+
+void PluginEditor::PianoRollComponent::setDebugOverlayEnabled (bool shouldShow)
+{
+    if (debugOverlayEnabled == shouldShow)
+        return;
+
+    debugOverlayEnabled = shouldShow;
+    repaint();
+}
+
+void PluginEditor::PianoRollComponent::setStatusMessage (juce::String message)
+{
+    if (statusMessage == message)
+        return;
+
+    statusMessage = std::move (message);
     repaint();
 }
 
@@ -1389,6 +1441,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     clusterWindowSlider.setEnabled (! lastTransportPlaying);
 
     correctionDisplay.setMinimalStyle (true);
+    pianoRoll.setDebugOverlayEnabled (boundsOverlayEnabled);
     updateUiVisibility();
 
     tabContainer.toBack();
@@ -1776,6 +1829,7 @@ bool PluginEditor::keyPressed (const juce::KeyPress& key)
     if (keyChar == 'b' || keyChar == 'B')
     {
         boundsOverlayEnabled = ! boundsOverlayEnabled;
+        pianoRoll.setDebugOverlayEnabled (boundsOverlayEnabled);
         repaint();
         return true;
     }
@@ -2022,6 +2076,7 @@ void PluginEditor::resetPluginState()
     tooltipsCheckbox.setToggleState (false, juce::dontSendNotification);
     pianoRoll.setReferenceData (processor.getReferenceDisplayDataForUi());
     pianoRoll.reset();
+    lastUiNoteSample = 0;
 
     lastInputNoteOnCounter = processor.getInputNoteOnCounter();
     lastOutputNoteOnCounter = processor.getOutputNoteOnCounter();
@@ -2042,11 +2097,46 @@ void PluginEditor::timerCallback()
     const auto nowMs = juce::Time::getMillisecondCounterHiRes();
     updateDeveloperModeFade (nowMs);
 
+    if (! processor.isTransportPlaying())
+    {
+        juce::String pendingPath;
+        if (processor.consumePendingReferencePath (pendingPath))
+        {
+            juce::String errorMessage;
+            if (processor.loadReferenceFromFile (juce::File (pendingPath), errorMessage))
+            {
+                referenceStatusLabel.setText ("", juce::dontSendNotification);
+                referenceLoadedIndicator.setActive (true);
+            }
+            else
+            {
+                referenceStatusLabel.setText ("Load failed: " + errorMessage, juce::dontSendNotification);
+                referenceLoadedIndicator.setActive (false);
+            }
+        }
+    }
+
     pianoRoll.setReferenceData (processor.getReferenceDisplayDataForUi());
-    pianoRoll.setTimeline (processor.getTimelineSampleForUi(),
-        processor.getReferenceTransportStartSampleForUi(),
-        processor.getSampleRateForUi());
+    const auto loadError = processor.getReferenceLoadError();
+    pianoRoll.setStatusMessage (loadError.isNotEmpty() ? "Load error: " + loadError : juce::String());
     processor.popUiNoteEvents (uiNoteEvents, 512);
+    if (! uiNoteEvents.empty())
+        lastUiNoteSample = uiNoteEvents.back().sample;
+
+    const auto timelineSample = processor.getTimelineSampleForUi();
+    const auto referenceStartSample = processor.getReferenceTransportStartSampleForUi();
+    const auto sampleRate = processor.getSampleRateForUi();
+    const bool transportPlaying = processor.isTransportPlaying();
+    const uint64_t halfWindowSamples = sampleRate > 0.0
+        ? static_cast<uint64_t> (std::llround (sampleRate * 2.5))
+        : 0;
+    const bool recentUserNote = ! transportPlaying
+        && lastUiNoteSample > 0
+        && timelineSample >= lastUiNoteSample
+        && (timelineSample - lastUiNoteSample) <= halfWindowSamples;
+    const uint64_t nowSample = (transportPlaying || recentUserNote) ? timelineSample : referenceStartSample;
+
+    pianoRoll.setTimeline (nowSample, referenceStartSample, sampleRate);
     pianoRoll.addUiEvents (uiNoteEvents);
     if (pianoRoll.isVisible())
         pianoRoll.repaint();

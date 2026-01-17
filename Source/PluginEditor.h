@@ -85,6 +85,8 @@ private:
         void addUiEvents (const std::vector<PluginProcessor::UiNoteEvent>& events);
         void setTimeline (uint64_t nowSample, uint64_t referenceStartSample, double sampleRate);
         void reset();
+        void setDebugOverlayEnabled (bool shouldShow);
+        void setStatusMessage (juce::String message);
 
     private:
         struct UserNote
@@ -113,6 +115,8 @@ private:
         int minNote = 0;
         int maxNote = 127;
         bool hasPitchRange = false;
+        bool debugOverlayEnabled = false;
+        juce::String statusMessage;
     };
 
     class ExpandButton final : public juce::Button
@@ -318,6 +322,7 @@ private:
     float lastStartOffsetMs = 0.0f;
     float lastStartOffsetBars = 0.0f;
     bool lastStartOffsetValid = false;
+    uint64_t lastUiNoteSample = 0;
     std::vector<PluginProcessor::UiNoteEvent> uiNoteEvents;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginEditor)

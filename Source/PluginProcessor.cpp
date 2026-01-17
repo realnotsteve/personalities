@@ -417,6 +417,8 @@ bool PluginProcessor::resetToDefaults (juce::String& errorMessage)
 
     referencePath.clear();
     apvts.state.setProperty (kReferencePathProperty, referencePath, nullptr);
+    pendingReferencePath.clear();
+    lastReferenceLoadError.clear();
 
     std::atomic_store (&referenceData, std::shared_ptr<ReferenceData>());
     std::atomic_store (&referenceDataShifted, std::shared_ptr<ReferenceData>());
@@ -1425,6 +1427,8 @@ bool PluginProcessor::loadReferenceFromFile (const juce::File& file, juce::Strin
     if (transportPlaying.load (std::memory_order_relaxed))
     {
         errorMessage = "Stop the transport before loading a reference.";
+        pendingReferencePath = file.getFullPathName();
+        lastReferenceLoadError = errorMessage;
         return false;
     }
 
@@ -1441,7 +1445,10 @@ bool PluginProcessor::loadReferenceFromFile (const juce::File& file, juce::Strin
         clusterWindowSeconds,
         errorMessage);
     if (baseReference == nullptr)
+    {
+        lastReferenceLoadError = errorMessage;
         return false;
+    }
 
     juce::String shiftError;
     auto shiftedReference = buildReferenceFromFile (file,
@@ -1453,6 +1460,8 @@ bool PluginProcessor::loadReferenceFromFile (const juce::File& file, juce::Strin
 
     std::atomic_store (&referenceData, baseReference);
     std::atomic_store (&referenceDataShifted, shiftedReference);
+    std::atomic_store (&referenceDisplayData, buildReferenceDisplayData (*baseReference));
+    std::atomic_store (&referenceDisplayDataShifted, buildReferenceDisplayData (*shiftedReference));
     referencePath = baseReference->sourcePath;
     apvts.state.setProperty (kReferencePathProperty, referencePath, nullptr);
     referenceTempoIndex = 0;
@@ -1462,6 +1471,8 @@ bool PluginProcessor::loadReferenceFromFile (const juce::File& file, juce::Strin
     startOffsetMs.store (0.0f, std::memory_order_relaxed);
     startOffsetBars.store (0.0f, std::memory_order_relaxed);
     startOffsetValid.store (false, std::memory_order_relaxed);
+    pendingReferencePath.clear();
+    lastReferenceLoadError.clear();
 
     return true;
 }
@@ -1469,6 +1480,21 @@ bool PluginProcessor::loadReferenceFromFile (const juce::File& file, juce::Strin
 juce::String PluginProcessor::getReferencePath() const
 {
     return referencePath;
+}
+
+juce::String PluginProcessor::getReferenceLoadError() const
+{
+    return lastReferenceLoadError;
+}
+
+bool PluginProcessor::consumePendingReferencePath (juce::String& path)
+{
+    if (pendingReferencePath.isEmpty())
+        return false;
+
+    path = pendingReferencePath;
+    pendingReferencePath.clear();
+    return true;
 }
 
 juce::AudioProcessorEditor* PluginProcessor::createEditor()

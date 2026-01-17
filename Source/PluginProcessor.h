@@ -94,6 +94,8 @@ public:
     uint64_t getReferenceTransportStartSampleForUi() const noexcept;
     double getSampleRateForUi() const noexcept;
     std::shared_ptr<const ReferenceDisplayData> getReferenceDisplayDataForUi() const noexcept;
+    juce::String getReferenceLoadError() const;
+    bool consumePendingReferencePath (juce::String& path);
 
     // Parameters
     juce::AudioProcessorValueTreeState apvts;
@@ -286,6 +288,8 @@ private:
     int tempoShiftMode = 0;
     std::atomic<bool> transportPlaying { false };
     juce::String referencePath;
+    juce::String pendingReferencePath;
+    juce::String lastReferenceLoadError;
     juce::MidiBuffer outputBuffer;
     std::array<MissLogEntry, kMaxMissLogEntries> missLog {};
     std::atomic<uint32_t> missLogCount { 0 };
