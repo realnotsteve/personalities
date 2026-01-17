@@ -340,12 +340,12 @@ void PluginEditor::InfluenceSliderLookAndFeel::drawLinearSlider (juce::Graphics&
 PluginEditor::PluginEditor (PluginProcessor& p)
 : juce::AudioProcessorEditor (&p), processor (p)
 {
-    backgroundOpen = juce::ImageCache::getFromMemory (BinaryData::background_open_x0y0_png,
-        BinaryData::background_open_x0y0_pngSize);
-    backgroundClosed = juce::ImageCache::getFromMemory (BinaryData::background_closed_x0y0_png,
-        BinaryData::background_closed_x0y0_pngSize);
-    openButtonImage = juce::ImageCache::getFromMemory (BinaryData::button_openner_x654y560_png,
-        BinaryData::button_openner_x654y560_pngSize);
+    backgroundOpen = juce::ImageCache::getFromMemory (BinaryData::backgroundopenx0y0_png,
+        BinaryData::backgroundopenx0y0_pngSize);
+    backgroundClosed = juce::ImageCache::getFromMemory (BinaryData::backgroundclosedx0y0_png,
+        BinaryData::backgroundclosedx0y0_pngSize);
+    openButtonImage = juce::ImageCache::getFromMemory (BinaryData::buttonopennerx654y560_png,
+        BinaryData::buttonopennerx654y560_pngSize);
     expandButton.setImage (openButtonImage);
 
     referenceLabel.setText ("Performer", juce::dontSendNotification);
