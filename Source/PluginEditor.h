@@ -145,6 +145,7 @@ private:
     juce::Image backgroundOpen;
     juce::Image backgroundClosed;
     juce::Image openButtonImage;
+    juce::Image performerDropdownImage;
     bool isExpanded = false;
     bool overlayEnabled = false;
     bool boundsOverlayEnabled = false;

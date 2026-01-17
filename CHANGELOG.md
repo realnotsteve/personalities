@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.0.31 (2026-01-16)
+
+- **Summary:** PERSONALITIES (PRISM): Update 3 areas (e.g., CMakeLists.txt)
+- **Files:**
+  - `CMakeLists.txt`
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `assets/gui/mode-none/widgets/indicator-midi_in-inactive-null-null-x1368y100.png`
+
 ## v0.0.30 (2026-01-16)
 
 - **Summary:** PERSONALITIES (PRISM): Update Source

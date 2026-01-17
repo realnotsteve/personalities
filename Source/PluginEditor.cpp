@@ -346,6 +346,9 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         BinaryData::backgroundclosedx0y0_pngSize);
     openButtonImage = juce::ImageCache::getFromMemory (BinaryData::buttonopennerx654y560_png,
         BinaryData::buttonopennerx654y560_pngSize);
+    performerDropdownImage = juce::ImageCache::getFromMemory (
+        BinaryData::dropdown_menuperformer_selectorx176y718_png,
+        BinaryData::dropdown_menuperformer_selectorx176y718_pngSize);
     expandButton.setImage (openButtonImage);
 
     referenceLabel.setText ("Performer", juce::dontSendNotification);
@@ -445,7 +448,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     }
     referenceBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
     referenceBox.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
-    referenceBox.setColour (juce::ComboBox::arrowColourId, juce::Colours::white.withAlpha (0.7f));
+    referenceBox.setColour (juce::ComboBox::arrowColourId, juce::Colours::transparentBlack);
 
     referenceBox.onChange = [this]
     {
@@ -865,6 +868,16 @@ void PluginEditor::paint (juce::Graphics& g)
     const auto& background = isExpanded ? backgroundOpen : backgroundClosed;
     if (background.isValid())
         g.drawImage (background, getLocalBounds().toFloat());
+
+    if (isExpanded && performerDropdownImage.isValid())
+    {
+        const auto dest = juce::Rectangle<float> (
+            176.0f * kAssetScale,
+            718.0f * kAssetScale,
+            performerDropdownImage.getWidth() * kAssetScale,
+            performerDropdownImage.getHeight() * kAssetScale);
+        g.drawImage (performerDropdownImage, dest);
+    }
 }
 
 void PluginEditor::paintOverChildren (juce::Graphics& g)
@@ -1024,7 +1037,16 @@ void PluginEditor::resized()
     inputLabel.setBounds (scaleRect (681, 50, 20, 17));
     outputLabel.setBounds (scaleRect (681, 72, 20, 17));
 
-    referenceBox.setBounds (scaleRect (leftPanelX + 72, leftPanelY + 168, 160, 22));
+    if (performerDropdownImage.isValid())
+    {
+        referenceBox.setBounds (assetRect (176, 718,
+            performerDropdownImage.getWidth(),
+            performerDropdownImage.getHeight()));
+    }
+    else
+    {
+        referenceBox.setBounds (scaleRect (leftPanelX + 72, leftPanelY + 168, 160, 22));
+    }
     correctionSlider.setBounds (scaleRect (leftPanelX + 31, leftPanelY + 246, 193, 16));
 
     correctionDisplay.setBounds (scaleRect (rightPanelX + 16, rightPanelY + 12,

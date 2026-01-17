@@ -21,6 +21,7 @@ juce_add_binary_data(PersonalitiesAssets
         assets/gui/mode-open/background/background-open-x0y0.png
         assets/gui/mode-closed/background/background-closed-x0y0.png
         assets/gui/mode-closed/widgets/button-openner/button-openner-x654y560.png
+        assets/gui/mode-open/widgets/dropdown_menu-performer_selector/dropdown_menu-performer_selector-x176y718.png
 )
 
 set(PERSONALITIES_BUILD_INFO_DIR "${CMAKE_BINARY_DIR}/generated")
