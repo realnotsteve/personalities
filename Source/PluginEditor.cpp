@@ -26,6 +26,10 @@ namespace
     constexpr int kResetY = 958;
     constexpr int kTooltipsX = 262;
     constexpr int kTooltipsY = 962;
+    constexpr float kDropdownFontSize = 11.0f;
+    constexpr const char* kPreferredDisplayFontName = "SF Pro Display";
+    constexpr const char* kFallbackDisplayFontName = ".SF NS Display";
+    constexpr const char* kFallbackDisplayFontNameAlt = "SF Pro Text";
     constexpr const char* kParamDelayMs = "delay_ms";
     constexpr const char* kParamClusterWindowMs = "match_window_ms";
     constexpr const char* kParamCorrection = "correction";
@@ -36,6 +40,29 @@ namespace
     constexpr const char* kParamBypass = "bypass";
     constexpr const char* kParamVelocityCorrection = "velocity_correction";
     constexpr const char* kParamTempoShiftBackBar = "tempo_shift_back_bar";
+
+    const juce::String kChooseLabel = juce::String::fromUTF8 ("Choose\xe2\x80\xa6");
+
+    const juce::String& getDisplayFontName()
+    {
+        static const juce::String name = []()
+        {
+            const auto names = juce::Font::findAllTypefaceNames();
+            if (names.contains (kPreferredDisplayFontName))
+                return juce::String (kPreferredDisplayFontName);
+            if (names.contains (kFallbackDisplayFontName))
+                return juce::String (kFallbackDisplayFontName);
+            if (names.contains (kFallbackDisplayFontNameAlt))
+                return juce::String (kFallbackDisplayFontNameAlt);
+            return juce::Font::getDefaultSansSerifFontName();
+        }();
+        return name;
+    }
+
+    juce::Font makeDisplayFont (float size)
+    {
+        return juce::Font (juce::FontOptions (getDisplayFontName(), size, juce::Font::plain));
+    }
 }
 
 void PluginEditor::PulseIndicator::paint (juce::Graphics& g)
@@ -372,6 +399,42 @@ void PluginEditor::InfluenceSliderLookAndFeel::setHandleImage (juce::Image image
     handleImage = std::move (image);
 }
 
+juce::Font PluginEditor::DropdownLookAndFeel::getComboBoxFont (juce::ComboBox&)
+{
+    return makeDisplayFont (kDropdownFontSize);
+}
+
+juce::Font PluginEditor::DropdownLookAndFeel::getPopupMenuFont()
+{
+    return makeDisplayFont (kDropdownFontSize);
+}
+
+void PluginEditor::DropdownLookAndFeel::drawComboBox (juce::Graphics&,
+                                                      int, int, bool,
+                                                      int, int, int, int,
+                                                      juce::ComboBox&)
+{
+}
+
+juce::Label* PluginEditor::DropdownLookAndFeel::createComboBoxTextBox (juce::ComboBox& box)
+{
+    auto* label = new juce::Label();
+    label->setJustificationType (box.getJustificationType());
+    label->setFont (getComboBoxFont (box));
+    label->setMinimumHorizontalScale (1.0f);
+    return label;
+}
+
+void PluginEditor::DropdownLookAndFeel::positionComboBoxText (juce::ComboBox& box, juce::Label& label)
+{
+    label.setBounds (1, 1,
+                     box.getWidth() - 2,
+                     box.getHeight() - 2);
+    label.setFont (getComboBoxFont (box));
+    label.setJustificationType (box.getJustificationType());
+    label.setMinimumHorizontalScale (1.0f);
+}
+
 PluginEditor::ImageToggleButton::ImageToggleButton()
     : juce::Button ("ImageToggle")
 {
@@ -462,6 +525,8 @@ void PluginEditor::ImageCheckboxButton::paintButton (juce::Graphics& g,
 PluginEditor::PluginEditor (PluginProcessor& p)
 : juce::AudioProcessorEditor (&p), processor (p)
 {
+    juce::LookAndFeel::getDefaultLookAndFeel().setDefaultSansSerifTypefaceName (getDisplayFontName());
+
     backgroundOpen = juce::ImageCache::getFromMemory (BinaryData::backgroundopenx0y0_png,
         BinaryData::backgroundopenx0y0_pngSize);
     backgroundClosed = juce::ImageCache::getFromMemory (BinaryData::backgroundclosedx0y0_png,
@@ -556,9 +621,11 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     addAndMakeVisible (correctionDisplay);
 
+    referenceBox.setLookAndFeel (&dropdownLookAndFeel);
     addAndMakeVisible (referenceBox);
     rebuildReferenceList();
 
+    modeBox.setLookAndFeel (&dropdownLookAndFeel);
     modeBox.clear();
     modeBox.addItem ("Naturaliser", 1);
     modeBox.addItem ("Virtuoso", 2);
@@ -570,7 +637,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     modeBox.setItemEnabled (3, true);
     modeBox.setItemEnabled (4, false);
     modeBox.setItemEnabled (5, false);
-    modeBox.setTextWhenNothingSelected ("Choose…");
+    modeBox.setTextWhenNothingSelected (kChooseLabel);
     modeBox.setSelectedId (0, juce::dontSendNotification);
     modeBox.setEnabled (true);
     modeBox.setJustificationType (juce::Justification::centredLeft);
@@ -592,7 +659,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         if (selectedId <= 0)
             return;
 
-        referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::white);
+        referenceBox.setColour (juce::ComboBox::textColourId, juce::Colour (0xff555ed2));
 
         const int index = selectedId - 1;
         if (! juce::isPositiveAndBelow (index, referenceFiles.size()))
@@ -619,6 +686,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
             if (referenceFiles[i].getFullPathName() == currentPath)
             {
                 referenceBox.setSelectedId (i + 1, juce::dontSendNotification);
+                referenceBox.setColour (juce::ComboBox::textColourId, juce::Colour (0xff555ed2));
                 referenceStatusLabel.setText ("", juce::dontSendNotification);
                 referenceLoadedIndicator.setActive (true);
                 break;
@@ -917,7 +985,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     buildInfoLabel.setText (buildInfoText, juce::dontSendNotification);
     buildInfoLabel.setJustificationType (juce::Justification::centredRight);
     buildInfoLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
-    buildInfoLabel.setFont (juce::Font (juce::FontOptions (10.0f)));
+    buildInfoLabel.setFont (makeDisplayFont (10.0f));
     addAndMakeVisible (buildInfoLabel);
 
     lastInputNoteOnCounter = processor.getInputNoteOnCounter();
@@ -1038,7 +1106,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
         return;
 
     juce::Graphics::ScopedSaveState state (g);
-    g.setFont (juce::Font (juce::FontOptions (12.0f)));
+    g.setFont (makeDisplayFont (12.0f));
 
     auto getTextWidth = [&](const juce::String& text)
     {
@@ -1446,14 +1514,14 @@ void PluginEditor::rebuildReferenceList()
     referenceBox.setTextWhenNoChoicesAvailable ("No personalities found");
     if (referenceFiles.isEmpty())
     {
-        referenceBox.setTextWhenNothingSelected ("Choose…");
+        referenceBox.setTextWhenNothingSelected (kChooseLabel);
         referenceBox.setSelectedId (0, juce::dontSendNotification);
         referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
         referenceBox.setEnabled (false);
     }
     else
     {
-        referenceBox.setTextWhenNothingSelected ("Choose…");
+        referenceBox.setTextWhenNothingSelected (kChooseLabel);
         referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
         referenceBox.setEnabled (true);
     }

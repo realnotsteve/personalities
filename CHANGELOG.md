@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.35 (2026-01-16)
+
+- **Summary:** PERSONALITIES (PRISM): Update Source, assets
+- **Files:**
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `assets/gui/mode-none/widgets/dropdown-mode_selector/dropdown-modeselector-x1188y118.png`
+
 ## v0.0.34 (2026-01-16)
 
 - **Summary:** PERSONALITIES (PRISM): Update CMakeLists.txt, Source

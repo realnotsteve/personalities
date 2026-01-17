@@ -102,6 +102,18 @@ private:
         juce::Image handleImage;
     };
 
+    class DropdownLookAndFeel final : public juce::LookAndFeel_V4
+    {
+    public:
+        DropdownLookAndFeel() = default;
+        juce::Font getComboBoxFont (juce::ComboBox&) override;
+        juce::Font getPopupMenuFont() override;
+        void drawComboBox (juce::Graphics&, int width, int height, bool isButtonDown,
+                           int buttonX, int buttonY, int buttonW, int buttonH, juce::ComboBox&) override;
+        juce::Label* createComboBoxTextBox (juce::ComboBox&) override;
+        void positionComboBoxText (juce::ComboBox&, juce::Label&) override;
+    };
+
     class ImageToggleButton final : public juce::Button
     {
     public:
@@ -135,7 +147,7 @@ private:
     private:
         void paintButton (juce::Graphics&, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
         juce::Image image;
-        juce::Colour checkColour = juce::Colour (0xff4086c1);
+        juce::Colour checkColour = juce::Colour (0xff555ed2);
     };
 
     void timerCallback() override;
@@ -146,6 +158,7 @@ private:
 
     PluginProcessor& processor;
 
+    DropdownLookAndFeel dropdownLookAndFeel;
     juce::ComboBox referenceBox;
     juce::ComboBox modeBox;
     juce::Label referenceLabel;
