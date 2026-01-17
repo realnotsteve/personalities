@@ -9,6 +9,9 @@ namespace
     constexpr int kUiBaseHeight = 509;
     constexpr float kOverlayAlpha = 0.45f;
     constexpr float kAssetScale = 0.5f;
+    constexpr int kEffectStrengthMinX = 82;
+    constexpr int kEffectStrengthMaxX = 410;
+    constexpr int kEffectStrengthY = 818;
     constexpr const char* kParamDelayMs = "delay_ms";
     constexpr const char* kParamClusterWindowMs = "match_window_ms";
     constexpr const char* kParamCorrection = "correction";
@@ -302,39 +305,32 @@ void PluginEditor::InfluenceSliderLookAndFeel::drawLinearSlider (juce::Graphics&
         return;
     }
 
-    juce::ignoreUnused (minSliderPos, maxSliderPos);
+    if (! handleImage.isValid())
+    {
+        juce::LookAndFeel_V4::drawLinearSlider (g, x, y, width, height, sliderPos, minSliderPos,
+                                                maxSliderPos, style, slider);
+        return;
+    }
 
-    const auto bounds = juce::Rectangle<float> (static_cast<float> (x), static_cast<float> (y),
-                                                static_cast<float> (width), static_cast<float> (height));
-    const float pillHeight = juce::jmin (bounds.getHeight() * 0.7f, 14.0f);
-    const float pillWidth = pillHeight * 2.6f;
-    const float pillY = bounds.getY() + (bounds.getHeight() - pillHeight) * 0.5f;
+    juce::ignoreUnused (sliderPos, minSliderPos, maxSliderPos);
 
-    float pillX = sliderPos - pillWidth * 0.5f;
-    pillX = juce::jlimit (bounds.getX(), bounds.getRight() - pillWidth, pillX);
+    const float handleWidth = handleImage.getWidth() * kAssetScale;
+    const float handleHeight = handleImage.getHeight() * kAssetScale;
+    const float range = juce::jmax (0.0f, static_cast<float> (width) - handleWidth);
+    const float normalised = static_cast<float> (slider.valueToProportionOfLength (slider.getValue()));
+    const float handleX = static_cast<float> (x) + range * normalised;
+    const float handleY = static_cast<float> (y);
 
-    const auto pillBounds = juce::Rectangle<float> (pillX, pillY, pillWidth, pillHeight);
-    const float cornerSize = pillHeight * 0.5f;
-    const auto baseColour = juce::Colour (0xff5d67db)
-        .withMultipliedAlpha (slider.isEnabled() ? 1.0f : 0.55f);
+    juce::Graphics::ScopedSaveState state (g);
+    if (! slider.isEnabled())
+        g.setOpacity (0.5f);
+    g.drawImage (handleImage, handleX, handleY, handleWidth, handleHeight,
+                 0, 0, handleImage.getWidth(), handleImage.getHeight());
+}
 
-    juce::ColourGradient fillGrad (baseColour.brighter (0.2f), pillBounds.getTopLeft(),
-                                   baseColour.darker (0.25f), pillBounds.getBottomLeft(), false);
-    g.setGradientFill (fillGrad);
-    g.fillRoundedRectangle (pillBounds, cornerSize);
-
-    g.setColour (baseColour.darker (0.55f));
-    g.drawRoundedRectangle (pillBounds, cornerSize, 1.0f);
-
-    auto highlight = pillBounds.reduced (1.0f, 1.0f);
-    highlight.setHeight (pillHeight * 0.45f);
-    g.setColour (juce::Colours::white.withAlpha (slider.isEnabled() ? 0.18f : 0.08f));
-    g.fillRoundedRectangle (highlight, highlight.getHeight() * 0.5f);
-
-    g.setColour (juce::Colours::white.withAlpha (slider.isEnabled() ? 0.9f : 0.6f));
-    g.setFont (juce::Font (pillHeight * 0.6f, juce::Font::bold));
-    g.drawFittedText (slider.getTextFromValue (slider.getValue()), pillBounds.toNearestInt(),
-                      juce::Justification::centred, 1);
+void PluginEditor::InfluenceSliderLookAndFeel::setHandleImage (juce::Image image)
+{
+    handleImage = std::move (image);
 }
 
 PluginEditor::PluginEditor (PluginProcessor& p)
@@ -349,7 +345,11 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     performerDropdownImage = juce::ImageCache::getFromMemory (
         BinaryData::dropdown_menuperformer_selectorx176y718_png,
         BinaryData::dropdown_menuperformer_selectorx176y718_pngSize);
+    effectStrengthHandleImage = juce::ImageCache::getFromMemory (
+        BinaryData::slidereffect_strengthx82y818_0_x410y818_100_png,
+        BinaryData::slidereffect_strengthx82y818_0_x410y818_100_pngSize);
     expandButton.setImage (openButtonImage);
+    influenceSliderLookAndFeel.setHandleImage (effectStrengthHandleImage);
 
     referenceLabel.setText ("Performer", juce::dontSendNotification);
     referenceLabel.setJustificationType (juce::Justification::centredLeft);
@@ -1047,7 +1047,18 @@ void PluginEditor::resized()
     {
         referenceBox.setBounds (scaleRect (leftPanelX + 72, leftPanelY + 168, 160, 22));
     }
-    correctionSlider.setBounds (scaleRect (leftPanelX + 31, leftPanelY + 246, 193, 16));
+    if (effectStrengthHandleImage.isValid())
+    {
+        const int handleWidth = effectStrengthHandleImage.getWidth();
+        const int handleHeight = effectStrengthHandleImage.getHeight();
+        const int rangeWidth = kEffectStrengthMaxX - kEffectStrengthMinX;
+        correctionSlider.setBounds (assetRect (kEffectStrengthMinX, kEffectStrengthY,
+            rangeWidth + handleWidth, handleHeight));
+    }
+    else
+    {
+        correctionSlider.setBounds (scaleRect (leftPanelX + 31, leftPanelY + 246, 193, 16));
+    }
 
     correctionDisplay.setBounds (scaleRect (rightPanelX + 16, rightPanelY + 12,
         rightPanelW - 32, rightPanelH - 24));

@@ -22,6 +22,7 @@ juce_add_binary_data(PersonalitiesAssets
         assets/gui/mode-closed/background/background-closed-x0y0.png
         assets/gui/mode-closed/widgets/button-openner/button-openner-x654y560.png
         assets/gui/mode-open/widgets/dropdown_menu-performer_selector/dropdown_menu-performer_selector-x176y718.png
+        "assets/gui/mode-open/widgets/slider-effect_strength/slider-effect_strength-x82y818_0%~ x410y818_100%.png"
 )
 
 set(PERSONALITIES_BUILD_INFO_DIR "${CMAKE_BINARY_DIR}/generated")

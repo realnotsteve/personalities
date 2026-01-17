@@ -82,6 +82,10 @@ private:
         void drawLinearSlider (juce::Graphics&, int x, int y, int width, int height,
                                float sliderPos, float minSliderPos, float maxSliderPos,
                                const juce::Slider::SliderStyle, juce::Slider&) override;
+        void setHandleImage (juce::Image image);
+
+    private:
+        juce::Image handleImage;
     };
 
     void timerCallback() override;
@@ -146,6 +150,7 @@ private:
     juce::Image backgroundClosed;
     juce::Image openButtonImage;
     juce::Image performerDropdownImage;
+    juce::Image effectStrengthHandleImage;
     bool isExpanded = false;
     bool overlayEnabled = false;
     bool boundsOverlayEnabled = false;
