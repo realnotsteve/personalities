@@ -163,6 +163,10 @@ private:
         uint64_t order = 0;
         uint8_t size = 0;
         uint8_t data[8] = {};
+        int refIndex = -1;
+        uint8_t noteNumber = 0;
+        uint8_t channel = 1;
+        uint8_t flags = 0;
     };
 
     struct MissLogEntry

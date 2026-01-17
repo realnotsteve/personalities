@@ -21,6 +21,8 @@ namespace
     constexpr float kMaxSlackMs = 2000.0f;
     constexpr float kMinClusterWindowMs = 20.0f;
     constexpr float kMaxClusterWindowMs = 1000.0f;
+    constexpr uint8_t kScheduledEventNoteFlag = 1u << 0;
+    constexpr uint8_t kScheduledEventNoteOnFlag = 1u << 1;
 
     uint64_t msToSamples (double sampleRate, float ms) noexcept
     {
@@ -921,6 +923,42 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
             event.order = orderCounter++;
             event.size = size;
             std::memcpy (event.data, data, static_cast<size_t> (size));
+            event.flags = 0;
+
+            insertScheduledEvent (event);
+        }
+        else if (outputEventCount < kMaxOutputEvents)
+        {
+            // Queue overflow: pass through without delay.
+            outputBuffer.addEvent (data, size, passThroughOffset);
+            countOutputNoteOn (data, size);
+            ++outputEventCount;
+        }
+    };
+
+    auto enqueueNoteEvent = [&](const uint8_t* data,
+                                uint8_t size,
+                                uint64_t dueSample,
+                                int passThroughOffset,
+                                int refIndex,
+                                bool isNoteOn,
+                                int channel)
+    {
+        if (isMuted)
+            return;
+
+        if (queueSize < kMaxQueuedEvents)
+        {
+            ScheduledMidiEvent event;
+            event.dueSample = dueSample;
+            event.order = orderCounter++;
+            event.size = size;
+            std::memcpy (event.data, data, static_cast<size_t> (size));
+            event.refIndex = refIndex;
+            event.noteNumber = data[1];
+            event.channel = static_cast<uint8_t> (juce::jlimit (1, 16, channel));
+            event.flags = static_cast<uint8_t> (kScheduledEventNoteFlag
+                | (isNoteOn ? kScheduledEventNoteOnFlag : 0));
 
             insertScheduledEvent (event);
         }
@@ -1010,7 +1048,6 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     }
                 }
 
-                pushUiNoteEvent (userSample, static_cast<int> (data[1]), channel, refIndex, true);
                 if (shouldDropNote)
                     continue;
 
@@ -1018,6 +1055,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     ? referenceTransportStartSample + (refNote->onSample - referenceStartSample)
                     : userSample;
                 const uint64_t correctedSample = lerpSamples (userSample, alignedRefSample, effectiveCorrection);
+                pushUiNoteEvent (correctedSample, static_cast<int> (data[1]), channel, refIndex, true);
                 const uint64_t dueSample = slackSamples + correctedSample;
                 const uint8_t inputVelocity = data[2];
                 uint8_t outVelocity = inputVelocity;
@@ -1042,7 +1080,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 uint8_t outData[3] = { static_cast<uint8_t> (0x90 | (channel - 1)),
                                        data[1],
                                        outVelocity };
-                enqueueEvent (outData, 3, dueSample, clampedOffset);
+                enqueueNoteEvent (outData, 3, dueSample, clampedOffset, refIndex, true, channel);
 
             }
             else if (status == 0x80 || (status == 0x90 && data[2] == 0))
@@ -1052,7 +1090,6 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 if (hasReference)
                     refIndex = removeOldestActiveNote (static_cast<int> (data[1]), channel);
                 const bool shouldDropNote = hasReference && dropExtraNotes && refIndex < 0;
-                pushUiNoteEvent (userSample, static_cast<int> (data[1]), channel, refIndex, false);
                 if (shouldDropNote)
                     continue;
 
@@ -1063,6 +1100,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                     ? referenceTransportStartSample + (refNote->offSample - referenceStartSample)
                     : userSample;
                 const uint64_t correctedSample = lerpSamples (userSample, alignedRefSample, effectiveCorrection);
+                pushUiNoteEvent (correctedSample, static_cast<int> (data[1]), channel, refIndex, false);
                 const uint64_t dueSample = slackSamples + correctedSample;
                 const uint8_t inputVelocity = data[2];
                 uint8_t outVelocity = inputVelocity;
@@ -1083,7 +1121,7 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
                 uint8_t outData[3] = { static_cast<uint8_t> (0x80 | (channel - 1)),
                                        data[1],
                                        outVelocity };
-                enqueueEvent (outData, 3, dueSample, clampedOffset);
+                enqueueNoteEvent (outData, 3, dueSample, clampedOffset, refIndex, false, channel);
             }
             else
             {
