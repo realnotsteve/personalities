@@ -64,6 +64,7 @@ public:
     juce::String createMissLogReport() const;
     bool rebuildReferenceClusters (float clusterWindowMs, juce::String& errorMessage);
     void requestStartOffsetReset() noexcept;
+    bool resetToDefaults (juce::String& errorMessage);
 
     // Parameters
     juce::AudioProcessorValueTreeState apvts;

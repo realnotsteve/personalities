@@ -27,6 +27,13 @@ juce_add_binary_data(PersonalitiesAssets
         assets/gui/mode-none/widgets/indicator-midi_in/indicator-midi_in-active-x1368y100.png
         assets/gui/mode-none/widgets/indicator-midi_out/indicator-midi_out-inactive-x1368y148.png
         assets/gui/mode-none/widgets/indicator-midi_out/indicator-midi_out-active-x1368yy148.png
+        assets/gui/mode-none/widgets/button-mute/button-mute-off-x1026y108.png
+        assets/gui/mode-none/widgets/button-mute/button-mute-on-x1026y108.png
+        assets/gui/mode-none/widgets/button-bypass/button-bypass-off-x1026y144.png
+        assets/gui/mode-none/widgets/button-bypass/button-bypass-on-x1026y144.png
+        assets/gui/mode-none/widgets/dropdown-mode_selector/dropdown-modeselector-x1188y118.png
+        "assets/gui/mode-none/widgets/button-reset/button-reset-x20~y958.png"
+        "assets/gui/mode-none/widgets/checkbox-tooltips/checkbox-tooltips-x262~y962.png"
 )
 
 set(PERSONALITIES_BUILD_INFO_DIR "${CMAKE_BINARY_DIR}/generated")

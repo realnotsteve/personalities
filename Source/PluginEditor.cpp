@@ -16,6 +16,16 @@ namespace
     constexpr int kMidiInY = 100;
     constexpr int kMidiOutX = 1368;
     constexpr int kMidiOutY = 148;
+    constexpr int kMuteX = 1026;
+    constexpr int kMuteY = 108;
+    constexpr int kBypassX = 1026;
+    constexpr int kBypassY = 144;
+    constexpr int kModeSelectorX = 1188;
+    constexpr int kModeSelectorY = 118;
+    constexpr int kResetX = 20;
+    constexpr int kResetY = 958;
+    constexpr int kTooltipsX = 262;
+    constexpr int kTooltipsY = 962;
     constexpr const char* kParamDelayMs = "delay_ms";
     constexpr const char* kParamClusterWindowMs = "match_window_ms";
     constexpr const char* kParamCorrection = "correction";
@@ -362,6 +372,93 @@ void PluginEditor::InfluenceSliderLookAndFeel::setHandleImage (juce::Image image
     handleImage = std::move (image);
 }
 
+PluginEditor::ImageToggleButton::ImageToggleButton()
+    : juce::Button ("ImageToggle")
+{
+}
+
+void PluginEditor::ImageToggleButton::setImages (juce::Image onImageIn, juce::Image offImageIn)
+{
+    onImage = std::move (onImageIn);
+    offImage = std::move (offImageIn);
+    repaint();
+}
+
+void PluginEditor::ImageToggleButton::paintButton (juce::Graphics& g,
+                                                   bool shouldDrawButtonAsHighlighted,
+                                                   bool shouldDrawButtonAsDown)
+{
+    juce::ignoreUnused (shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
+
+    const auto& image = getToggleState() ? onImage : offImage;
+    if (! image.isValid())
+        return;
+
+    juce::Graphics::ScopedSaveState state (g);
+    if (! isEnabled())
+        g.setOpacity (0.5f);
+    g.drawImage (image, getLocalBounds().toFloat());
+}
+
+PluginEditor::ImageMomentaryButton::ImageMomentaryButton()
+    : juce::Button ("ImageMomentary")
+{
+}
+
+void PluginEditor::ImageMomentaryButton::setImage (juce::Image imageIn)
+{
+    image = std::move (imageIn);
+    repaint();
+}
+
+void PluginEditor::ImageMomentaryButton::paintButton (juce::Graphics& g,
+                                                      bool shouldDrawButtonAsHighlighted,
+                                                      bool shouldDrawButtonAsDown)
+{
+    juce::ignoreUnused (shouldDrawButtonAsHighlighted);
+
+    if (! image.isValid())
+        return;
+
+    g.drawImage (image, getLocalBounds().toFloat());
+
+    if (shouldDrawButtonAsDown)
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.2f));
+        g.fillRect (getLocalBounds());
+    }
+}
+
+PluginEditor::ImageCheckboxButton::ImageCheckboxButton()
+    : juce::Button ("ImageCheckbox")
+{
+}
+
+void PluginEditor::ImageCheckboxButton::setImage (juce::Image imageIn)
+{
+    image = std::move (imageIn);
+    repaint();
+}
+
+void PluginEditor::ImageCheckboxButton::paintButton (juce::Graphics& g,
+                                                     bool shouldDrawButtonAsHighlighted,
+                                                     bool shouldDrawButtonAsDown)
+{
+    juce::ignoreUnused (shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
+
+    if (! image.isValid())
+        return;
+
+    g.drawImage (image, getLocalBounds().toFloat());
+
+    if (getToggleState())
+    {
+        auto checkBounds = getLocalBounds().reduced (1);
+        g.setColour (checkColour);
+        g.fillRect (checkBounds);
+    }
+}
+
 PluginEditor::PluginEditor (PluginProcessor& p)
 : juce::AudioProcessorEditor (&p), processor (p)
 {
@@ -377,6 +474,27 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     effectStrengthHandleImage = juce::ImageCache::getFromMemory (
         BinaryData::slidereffect_strengthx82y818_0_x410y818_100_png,
         BinaryData::slidereffect_strengthx82y818_0_x410y818_100_pngSize);
+    muteOffImage = juce::ImageCache::getFromMemory (
+        BinaryData::buttonmuteoffx1026y108_png,
+        BinaryData::buttonmuteoffx1026y108_pngSize);
+    muteOnImage = juce::ImageCache::getFromMemory (
+        BinaryData::buttonmuteonx1026y108_png,
+        BinaryData::buttonmuteonx1026y108_pngSize);
+    bypassOffImage = juce::ImageCache::getFromMemory (
+        BinaryData::buttonbypassoffx1026y144_png,
+        BinaryData::buttonbypassoffx1026y144_pngSize);
+    bypassOnImage = juce::ImageCache::getFromMemory (
+        BinaryData::buttonbypassonx1026y144_png,
+        BinaryData::buttonbypassonx1026y144_pngSize);
+    modeDropdownImage = juce::ImageCache::getFromMemory (
+        BinaryData::dropdownmodeselectorx1188y118_png,
+        BinaryData::dropdownmodeselectorx1188y118_pngSize);
+    resetButtonImage = juce::ImageCache::getFromMemory (
+        BinaryData::buttonresetx20y958_png,
+        BinaryData::buttonresetx20y958_pngSize);
+    tooltipsCheckboxImage = juce::ImageCache::getFromMemory (
+        BinaryData::checkboxtooltipsx262y962_png,
+        BinaryData::checkboxtooltipsx262y962_pngSize);
     midiInInactiveImage = juce::ImageCache::getFromMemory (
         BinaryData::indicatormidi_ininactivex1368y100_png,
         BinaryData::indicatormidi_ininactivex1368y100_pngSize);
@@ -438,64 +556,43 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     addAndMakeVisible (correctionDisplay);
 
-    const auto referenceDir = juce::File::getSpecialLocation (juce::File::userHomeDirectory)
-        .getChildFile ("Downloads")
-        .getChildFile ("PRISM");
-    if (referenceDir.isDirectory())
-        referenceDir.findChildFiles (referenceFiles, juce::File::findFiles, false, "*.mid;*.midi");
-
-    struct FileSorter
-    {
-        int compareElements (const juce::File& a, const juce::File& b) const
-        {
-            return a.getFileName().compareIgnoreCase (b.getFileName());
-        }
-    };
-
-    FileSorter sorter;
-    referenceFiles.sort (sorter);
-
-    referenceBox.clear();
-    for (int i = 0; i < referenceFiles.size(); ++i)
-        referenceBox.addItem (referenceFiles[i].getFileNameWithoutExtension(), i + 1);
-
-    referenceBox.setTextWhenNoChoicesAvailable ("No personalities found");
     addAndMakeVisible (referenceBox);
+    rebuildReferenceList();
 
-    modeBox.addItem ("Influencer", 1);
+    modeBox.clear();
+    modeBox.addItem ("Naturaliser", 1);
     modeBox.addItem ("Virtuoso", 2);
-    modeBox.addItem ("Actualiser", 3);
-    modeBox.setSelectedId (1, juce::dontSendNotification);
-    modeBox.setEnabled (false);
+    modeBox.addItem ("Influencer", 3);
+    modeBox.addItem ("Actualiser", 4);
+    modeBox.addItem ("Composer", 5);
+    modeBox.setItemEnabled (1, false);
+    modeBox.setItemEnabled (2, false);
+    modeBox.setItemEnabled (3, true);
+    modeBox.setItemEnabled (4, false);
+    modeBox.setItemEnabled (5, false);
+    modeBox.setTextWhenNothingSelected ("Choose…");
+    modeBox.setSelectedId (0, juce::dontSendNotification);
+    modeBox.setEnabled (true);
     modeBox.setJustificationType (juce::Justification::centredLeft);
     modeBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
     modeBox.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
-    modeBox.setColour (juce::ComboBox::textColourId, juce::Colours::white);
-    modeBox.setColour (juce::ComboBox::arrowColourId, juce::Colours::white.withAlpha (0.7f));
+    modeBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
+    modeBox.setColour (juce::ComboBox::arrowColourId, juce::Colours::transparentBlack);
+    modeBox.onChange = [this]
+    {
+        const bool influencerSelected = (modeBox.getSelectedId() == 3);
+        modeBox.setColour (juce::ComboBox::textColourId,
+            influencerSelected ? juce::Colours::white : juce::Colours::lightgrey);
+    };
     addAndMakeVisible (modeBox);
-
-    if (referenceFiles.isEmpty())
-    {
-        referenceBox.setTextWhenNothingSelected ("No personalities found");
-        referenceBox.setSelectedId (0, juce::dontSendNotification);
-        referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
-        referenceBox.setEnabled (false);
-    }
-    else
-    {
-        referenceBox.setTextWhenNothingSelected ("Select personality...");
-        referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::white);
-        referenceBox.setEnabled (true);
-    }
-    referenceBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
-    referenceBox.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
-    referenceBox.setColour (juce::ComboBox::arrowColourId, juce::Colours::transparentBlack);
 
     referenceBox.onChange = [this]
     {
         const int selectedId = referenceBox.getSelectedId();
         if (selectedId <= 0)
             return;
+
+        referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::white);
 
         const int index = selectedId - 1;
         if (! juce::isPositiveAndBelow (index, referenceFiles.size()))
@@ -686,19 +783,25 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     velocityButton.setClickingTogglesState (true);
     addAndMakeVisible (velocityButton);
 
-    muteButton.setButtonText ("Mute");
     muteButton.setClickingTogglesState (true);
-    muteButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff3e4046));
-    muteButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff767d87));
-    muteButton.setColour (juce::TextButton::textColourOffId, juce::Colours::white);
+    muteButton.setImages (muteOnImage, muteOffImage);
     addAndMakeVisible (muteButton);
 
-    bypassButton.setButtonText ("Bypass");
     bypassButton.setClickingTogglesState (true);
-    bypassButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff782b2f));
-    bypassButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffa3393f));
-    bypassButton.setColour (juce::TextButton::textColourOffId, juce::Colours::white);
+    bypassButton.setImages (bypassOnImage, bypassOffImage);
     addAndMakeVisible (bypassButton);
+
+    resetButton.setImage (resetButtonImage);
+    resetButton.onClick = [this]
+    {
+        resetPluginState();
+    };
+    addAndMakeVisible (resetButton);
+
+    tooltipsCheckbox.setClickingTogglesState (true);
+    tooltipsCheckbox.setToggleState (false, juce::dontSendNotification);
+    tooltipsCheckbox.setImage (tooltipsCheckboxImage);
+    addAndMakeVisible (tooltipsCheckbox);
 
     expandButton.onClick = [this]
     {
@@ -901,6 +1004,16 @@ void PluginEditor::paint (juce::Graphics& g)
     if (background.isValid())
         g.drawImage (background, getLocalBounds().toFloat());
 
+    if (modeDropdownImage.isValid())
+    {
+        const auto dest = juce::Rectangle<float> (
+            kModeSelectorX * kAssetScale,
+            kModeSelectorY * kAssetScale,
+            modeDropdownImage.getWidth() * kAssetScale,
+            modeDropdownImage.getHeight() * kAssetScale);
+        g.drawImage (modeDropdownImage, dest);
+    }
+
     if (isExpanded && performerDropdownImage.isValid())
     {
         const auto dest = juce::Rectangle<float> (
@@ -1010,6 +1123,8 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     drawBounds (startOffsetValueLabel, "startOffsetValueLabel");
     drawBounds (muteButton, "muteButton");
     drawBounds (bypassButton, "bypassButton");
+    drawBounds (resetButton, "resetButton");
+    drawBounds (tooltipsCheckbox, "tooltipsCheckbox");
     drawBounds (modeBox, "modeBox");
     drawBounds (inputIndicator, "inputIndicator");
     drawBounds (outputIndicator, "outputIndicator");
@@ -1063,9 +1178,46 @@ void PluginEditor::resized()
             openButtonImage.getWidth(), openButtonImage.getHeight()));
     }
 
-    muteButton.setBounds (scaleRect (512, 53, 29, 15));
-    bypassButton.setBounds (scaleRect (512, 72, 29, 15));
-    modeBox.setBounds (scaleRect (590, 60, 76, 20));
+    if (muteOffImage.isValid())
+    {
+        muteButton.setBounds (assetRect (kMuteX, kMuteY,
+            muteOffImage.getWidth(), muteOffImage.getHeight()));
+    }
+    else
+    {
+        muteButton.setBounds (scaleRect (512, 53, 29, 15));
+    }
+
+    if (bypassOffImage.isValid())
+    {
+        bypassButton.setBounds (assetRect (kBypassX, kBypassY,
+            bypassOffImage.getWidth(), bypassOffImage.getHeight()));
+    }
+    else
+    {
+        bypassButton.setBounds (scaleRect (512, 72, 29, 15));
+    }
+
+    if (resetButtonImage.isValid())
+    {
+        resetButton.setBounds (assetRect (kResetX, kResetY,
+            resetButtonImage.getWidth(), resetButtonImage.getHeight()));
+    }
+
+    if (tooltipsCheckboxImage.isValid())
+    {
+        tooltipsCheckbox.setBounds (assetRect (kTooltipsX, kTooltipsY,
+            tooltipsCheckboxImage.getWidth(), tooltipsCheckboxImage.getHeight()));
+    }
+    if (modeDropdownImage.isValid())
+    {
+        modeBox.setBounds (assetRect (kModeSelectorX, kModeSelectorY,
+            modeDropdownImage.getWidth(), modeDropdownImage.getHeight()));
+    }
+    else
+    {
+        modeBox.setBounds (scaleRect (590, 60, 76, 20));
+    }
     if (midiInInactiveImage.isValid())
     {
         inputIndicator.setBounds (assetRect (kMidiInX, kMidiInY,
@@ -1262,6 +1414,104 @@ void PluginEditor::updateUiVisibility()
     velocityButton.setVisible (isExpanded && showDeveloper);
 
     buildInfoLabel.setVisible (true);
+    resetButton.setVisible (true);
+    tooltipsCheckbox.setVisible (true);
+}
+
+void PluginEditor::rebuildReferenceList()
+{
+    referenceFiles.clear();
+
+    const auto referenceDir = juce::File::getSpecialLocation (juce::File::userHomeDirectory)
+        .getChildFile ("Downloads")
+        .getChildFile ("PRISM");
+    if (referenceDir.isDirectory())
+        referenceDir.findChildFiles (referenceFiles, juce::File::findFiles, false, "*.mid;*.midi");
+
+    struct FileSorter
+    {
+        int compareElements (const juce::File& a, const juce::File& b) const
+        {
+            return a.getFileName().compareIgnoreCase (b.getFileName());
+        }
+    };
+
+    FileSorter sorter;
+    referenceFiles.sort (sorter);
+
+    referenceBox.clear (juce::dontSendNotification);
+    for (int i = 0; i < referenceFiles.size(); ++i)
+        referenceBox.addItem (referenceFiles[i].getFileNameWithoutExtension(), i + 1);
+
+    referenceBox.setTextWhenNoChoicesAvailable ("No personalities found");
+    if (referenceFiles.isEmpty())
+    {
+        referenceBox.setTextWhenNothingSelected ("Choose…");
+        referenceBox.setSelectedId (0, juce::dontSendNotification);
+        referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
+        referenceBox.setEnabled (false);
+    }
+    else
+    {
+        referenceBox.setTextWhenNothingSelected ("Choose…");
+        referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
+        referenceBox.setEnabled (true);
+    }
+
+    referenceBox.setColour (juce::ComboBox::backgroundColourId, juce::Colours::transparentBlack);
+    referenceBox.setColour (juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
+    referenceBox.setColour (juce::ComboBox::arrowColourId, juce::Colours::transparentBlack);
+}
+
+void PluginEditor::resetParametersToDefaults()
+{
+    for (auto* parameter : processor.getParameters())
+    {
+        if (parameter != nullptr)
+            parameter->setValueNotifyingHost (parameter->getDefaultValue());
+    }
+}
+
+void PluginEditor::resetPluginState()
+{
+    juce::String errorMessage;
+    if (! processor.resetToDefaults (errorMessage))
+    {
+        if (errorMessage.isNotEmpty())
+            referenceStatusLabel.setText (errorMessage, juce::dontSendNotification);
+        return;
+    }
+
+    resetParametersToDefaults();
+
+    developerToggle.setToggleState (false, juce::dontSendNotification);
+    developerToggle.setButtonText ("DEV");
+
+    rebuildReferenceList();
+    referenceLoadedIndicator.setActive (false);
+    referenceStatusLabel.setText (referenceFiles.isEmpty() ? "No personalities found." : "No reference loaded.",
+        juce::dontSendNotification);
+
+    referenceBox.setSelectedId (0, juce::dontSendNotification);
+    referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
+
+    modeBox.setSelectedId (0, juce::dontSendNotification);
+    modeBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
+
+    tooltipsCheckbox.setToggleState (false, juce::dontSendNotification);
+
+    lastInputNoteOnCounter = processor.getInputNoteOnCounter();
+    lastOutputNoteOnCounter = processor.getOutputNoteOnCounter();
+    lastInputFlashMs = 0.0;
+    lastOutputFlashMs = 0.0;
+    inputIndicator.setActive (false);
+    outputIndicator.setActive (false);
+
+    isExpanded = false;
+    expandButton.setExpanded (false);
+    updateUiVisibility();
+    resized();
+    repaint();
 }
 
 void PluginEditor::timerCallback()

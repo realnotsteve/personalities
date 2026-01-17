@@ -102,8 +102,47 @@ private:
         juce::Image handleImage;
     };
 
+    class ImageToggleButton final : public juce::Button
+    {
+    public:
+        ImageToggleButton();
+        void setImages (juce::Image onImage, juce::Image offImage);
+
+    private:
+        void paintButton (juce::Graphics&, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
+        juce::Image onImage;
+        juce::Image offImage;
+    };
+
+    class ImageMomentaryButton final : public juce::Button
+    {
+    public:
+        ImageMomentaryButton();
+        void setImage (juce::Image image);
+
+    private:
+        void paintButton (juce::Graphics&, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
+        juce::Image image;
+    };
+
+    class ImageCheckboxButton final : public juce::Button
+    {
+    public:
+        ImageCheckboxButton();
+        void setImage (juce::Image image);
+        void setCheckColour (juce::Colour colour) { checkColour = colour; }
+
+    private:
+        void paintButton (juce::Graphics&, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
+        juce::Image image;
+        juce::Colour checkColour = juce::Colour (0xff4086c1);
+    };
+
     void timerCallback() override;
     void updateUiVisibility();
+    void rebuildReferenceList();
+    void resetParametersToDefaults();
+    void resetPluginState();
 
     PluginProcessor& processor;
 
@@ -156,8 +195,10 @@ private:
     juce::TextButton copyLogButton;
     juce::ToggleButton tempoShiftButton;
     juce::ToggleButton velocityButton;
-    juce::TextButton muteButton;
-    juce::TextButton bypassButton;
+    ImageToggleButton muteButton;
+    ImageToggleButton bypassButton;
+    ImageMomentaryButton resetButton;
+    ImageCheckboxButton tooltipsCheckbox;
     ExpandButton expandButton;
 
     juce::Image backgroundOpen;
@@ -165,6 +206,13 @@ private:
     juce::Image openButtonImage;
     juce::Image performerDropdownImage;
     juce::Image effectStrengthHandleImage;
+    juce::Image muteOnImage;
+    juce::Image muteOffImage;
+    juce::Image bypassOnImage;
+    juce::Image bypassOffImage;
+    juce::Image modeDropdownImage;
+    juce::Image resetButtonImage;
+    juce::Image tooltipsCheckboxImage;
     juce::Image midiInActiveImage;
     juce::Image midiInInactiveImage;
     juce::Image midiOutActiveImage;

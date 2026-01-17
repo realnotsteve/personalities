@@ -354,6 +354,52 @@ bool PluginProcessor::rebuildReferenceClusters (float clusterWindowMs, juce::Str
     return true;
 }
 
+bool PluginProcessor::resetToDefaults (juce::String& errorMessage)
+{
+    if (transportPlaying.load (std::memory_order_relaxed))
+    {
+        errorMessage = "Stop the transport before resetting.";
+        return false;
+    }
+
+    referencePath.clear();
+    apvts.state.setProperty (kReferencePathProperty, referencePath, nullptr);
+
+    std::atomic_store (&referenceData, std::shared_ptr<ReferenceData>());
+    std::atomic_store (&referenceDataShifted, std::shared_ptr<ReferenceData>());
+
+    referenceTempoIndex = 0;
+    queueSize = 0;
+    timelineSample = 0;
+    latchedSlackSamples = 0;
+    referenceTransportStartSample = 0;
+    lastHostSample = -1;
+    transportWasPlaying = false;
+    tempoShiftMode = 0;
+    userStartSampleCaptured = false;
+
+    resetPlaybackState();
+    clearMissLog();
+    outputBuffer.clear();
+
+    inputNoteOnCounter.store (0, std::memory_order_relaxed);
+    outputNoteOnCounter.store (0, std::memory_order_relaxed);
+    lastTimingDeltaMs.store (0.0f, std::memory_order_relaxed);
+    lastNoteOffDeltaMs.store (0.0f, std::memory_order_relaxed);
+    lastVelocityDelta.store (0.0f, std::memory_order_relaxed);
+    matchedNoteOnCounter.store (0, std::memory_order_relaxed);
+    missedNoteOnCounter.store (0, std::memory_order_relaxed);
+    cpuLoadPercent.store (0.0f, std::memory_order_relaxed);
+    hostBpm.store (-1.0f, std::memory_order_relaxed);
+    referenceBpm.store (-1.0f, std::memory_order_relaxed);
+    startOffsetMs.store (0.0f, std::memory_order_relaxed);
+    startOffsetBars.store (0.0f, std::memory_order_relaxed);
+    startOffsetValid.store (false, std::memory_order_relaxed);
+    startOffsetResetRequested.store (false, std::memory_order_relaxed);
+
+    return true;
+}
+
 void PluginProcessor::requestStartOffsetReset() noexcept
 {
     startOffsetMs.store (0.0f, std::memory_order_relaxed);
