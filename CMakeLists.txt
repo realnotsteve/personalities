@@ -22,11 +22,11 @@ juce_add_binary_data(PersonalitiesAssets
         assets/gui/mode-closed/background/background-closed-x0y0.png
         assets/gui/mode-closed/widgets/button-openner/button-openner-x654y560.png
         assets/gui/mode-open/widgets/dropdown_menu-performer_selector/dropdown_menu-performer_selector-x176y718.png
-        "assets/gui/mode-open/widgets/slider-effect_strength/slider-effect_strength-x82y818_0%~ x410y818_100%.png"
+        "assets/gui/mode-open/widgets/slider-effect_strength/slider-effect_strength-x82y818_0%~x410y818_100%.png"
         assets/gui/mode-none/widgets/indicator-midi_in/indicator-midi_in-inactive-x1368y100.png
         assets/gui/mode-none/widgets/indicator-midi_in/indicator-midi_in-active-x1368y100.png
         assets/gui/mode-none/widgets/indicator-midi_out/indicator-midi_out-inactive-x1368y148.png
-        assets/gui/mode-none/widgets/indicator-midi_out/indicator-midi_out-active-x1368yy148.png
+        assets/gui/mode-none/widgets/indicator-midi_out/indicator-midi_out-active-x1368y148.png
         assets/gui/mode-none/widgets/button-mute/button-mute-off-x1026y108.png
         assets/gui/mode-none/widgets/button-mute/button-mute-on-x1026y108.png
         assets/gui/mode-none/widgets/button-bypass/button-bypass-off-x1026y144.png

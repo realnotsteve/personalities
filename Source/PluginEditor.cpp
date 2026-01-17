@@ -580,8 +580,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         BinaryData::indicatormidi_outinactivex1368y148_png,
         BinaryData::indicatormidi_outinactivex1368y148_pngSize);
     midiOutActiveImage = juce::ImageCache::getFromMemory (
-        BinaryData::indicatormidi_outactivex1368yy148_png,
-        BinaryData::indicatormidi_outactivex1368yy148_pngSize);
+        BinaryData::indicatormidi_outactivex1368y148_png,
+        BinaryData::indicatormidi_outactivex1368y148_pngSize);
     expandButton.setImage (openButtonImage);
     influenceSliderLookAndFeel.setHandleImage (effectStrengthHandleImage);
 

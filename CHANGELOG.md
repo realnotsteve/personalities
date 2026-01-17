@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.0.37 (2026-01-17)
+
+- **Summary:** PERSONALITIES (PRISM): Update 3 areas (e.g., CMakeLists.txt)
+- **Files:**
+  - `CMakeLists.txt`
+  - `Source/PluginEditor.cpp`
+  - `assets/gui/mode-none/widgets/button-open_developer_console/button-open_developer_console-off-x1338y22.png`
+  - `assets/gui/mode-none/widgets/button-open_developer_console/button-open_developer_console-on-x1338y22.png`
+  - `assets/gui/mode-none/widgets/indicator-develop_mode/indicator-developer_mode-x1112y36.png`
+  - `assets/gui/mode-none/widgets/indicator-midi_out/indicator-midi_out-active-x1368y148.png`
+  - `assets/gui/mode-open/widgets/slider-effect_strength/slider-effect_strength-x82y818_0%~x410y818_100%.png`
+
 ## v0.0.36 (2026-01-16)
 
 - **Summary:** PERSONALITIES (PRISM): Update Source
