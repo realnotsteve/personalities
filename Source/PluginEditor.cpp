@@ -12,6 +12,10 @@ namespace
     constexpr int kEffectStrengthMinX = 82;
     constexpr int kEffectStrengthMaxX = 410;
     constexpr int kEffectStrengthY = 818;
+    constexpr int kMidiInX = 1368;
+    constexpr int kMidiInY = 100;
+    constexpr int kMidiOutX = 1368;
+    constexpr int kMidiOutY = 148;
     constexpr const char* kParamDelayMs = "delay_ms";
     constexpr const char* kParamClusterWindowMs = "match_window_ms";
     constexpr const char* kParamCorrection = "correction";
@@ -46,6 +50,31 @@ void PluginEditor::PulseIndicator::setColours (juce::Colour active, juce::Colour
 {
     activeColour = active;
     inactiveColour = inactive;
+    repaint();
+}
+
+void PluginEditor::ImageIndicator::paint (juce::Graphics& g)
+{
+    const auto& image = active ? activeImage : inactiveImage;
+    if (! image.isValid())
+        return;
+
+    g.drawImage (image, getLocalBounds().toFloat());
+}
+
+void PluginEditor::ImageIndicator::setActive (bool shouldBeActive)
+{
+    if (active == shouldBeActive)
+        return;
+
+    active = shouldBeActive;
+    repaint();
+}
+
+void PluginEditor::ImageIndicator::setImages (juce::Image activeImageIn, juce::Image inactiveImageIn)
+{
+    activeImage = std::move (activeImageIn);
+    inactiveImage = std::move (inactiveImageIn);
     repaint();
 }
 
@@ -348,6 +377,18 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     effectStrengthHandleImage = juce::ImageCache::getFromMemory (
         BinaryData::slidereffect_strengthx82y818_0_x410y818_100_png,
         BinaryData::slidereffect_strengthx82y818_0_x410y818_100_pngSize);
+    midiInInactiveImage = juce::ImageCache::getFromMemory (
+        BinaryData::indicatormidi_ininactivex1368y100_png,
+        BinaryData::indicatormidi_ininactivex1368y100_pngSize);
+    midiInActiveImage = juce::ImageCache::getFromMemory (
+        BinaryData::indicatormidi_inactivex1368y100_png,
+        BinaryData::indicatormidi_inactivex1368y100_pngSize);
+    midiOutInactiveImage = juce::ImageCache::getFromMemory (
+        BinaryData::indicatormidi_outinactivex1368y148_png,
+        BinaryData::indicatormidi_outinactivex1368y148_pngSize);
+    midiOutActiveImage = juce::ImageCache::getFromMemory (
+        BinaryData::indicatormidi_outactivex1368yy148_png,
+        BinaryData::indicatormidi_outactivex1368yy148_pngSize);
     expandButton.setImage (openButtonImage);
     influenceSliderLookAndFeel.setHandleImage (effectStrengthHandleImage);
 
@@ -563,19 +604,10 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     };
     addAndMakeVisible (pitchToleranceSlider);
 
-    inputLabel.setText ("IN", juce::dontSendNotification);
-    inputLabel.setJustificationType (juce::Justification::centred);
-    inputLabel.setColour (juce::Label::backgroundColourId, juce::Colour (0xff1c212b));
-    inputLabel.setColour (juce::Label::textColourId, juce::Colours::white);
-    inputLabel.setColour (juce::Label::outlineColourId, juce::Colour (0xff2f3642));
-    addAndMakeVisible (inputLabel);
-
-    outputLabel.setText ("OUT", juce::dontSendNotification);
-    outputLabel.setJustificationType (juce::Justification::centred);
-    outputLabel.setColour (juce::Label::backgroundColourId, juce::Colour (0xff2b84ff));
-    outputLabel.setColour (juce::Label::textColourId, juce::Colours::white);
-    outputLabel.setColour (juce::Label::outlineColourId, juce::Colour (0xff2f3642));
-    addAndMakeVisible (outputLabel);
+    inputIndicator.setImages (midiInActiveImage, midiInInactiveImage);
+    outputIndicator.setImages (midiOutActiveImage, midiOutInactiveImage);
+    addAndMakeVisible (inputIndicator);
+    addAndMakeVisible (outputIndicator);
 
     timingLabel.setText ("Timing (ms)", juce::dontSendNotification);
     timingLabel.setJustificationType (juce::Justification::centred);
@@ -979,8 +1011,8 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     drawBounds (muteButton, "muteButton");
     drawBounds (bypassButton, "bypassButton");
     drawBounds (modeBox, "modeBox");
-    drawBounds (inputLabel, "inputLabel");
-    drawBounds (outputLabel, "outputLabel");
+    drawBounds (inputIndicator, "inputIndicator");
+    drawBounds (outputIndicator, "outputIndicator");
     drawBounds (buildInfoLabel, "buildInfoLabel");
 
     if (hasMousePosition)
@@ -1034,8 +1066,24 @@ void PluginEditor::resized()
     muteButton.setBounds (scaleRect (512, 53, 29, 15));
     bypassButton.setBounds (scaleRect (512, 72, 29, 15));
     modeBox.setBounds (scaleRect (590, 60, 76, 20));
-    inputLabel.setBounds (scaleRect (681, 50, 20, 17));
-    outputLabel.setBounds (scaleRect (681, 72, 20, 17));
+    if (midiInInactiveImage.isValid())
+    {
+        inputIndicator.setBounds (assetRect (kMidiInX, kMidiInY,
+            midiInInactiveImage.getWidth(), midiInInactiveImage.getHeight()));
+    }
+    else
+    {
+        inputIndicator.setBounds (scaleRect (681, 50, 20, 17));
+    }
+    if (midiOutInactiveImage.isValid())
+    {
+        outputIndicator.setBounds (assetRect (kMidiOutX, kMidiOutY,
+            midiOutInactiveImage.getWidth(), midiOutInactiveImage.getHeight()));
+    }
+    else
+    {
+        outputIndicator.setBounds (scaleRect (681, 72, 20, 17));
+    }
 
     if (performerDropdownImage.isValid())
     {
@@ -1219,9 +1267,6 @@ void PluginEditor::updateUiVisibility()
 void PluginEditor::timerCallback()
 {
     const auto nowMs = juce::Time::getMillisecondCounterHiRes();
-    const auto indicatorBlue = juce::Colour (0xff2b84ff);
-    const auto indicatorBlueBright = juce::Colour (0xff4aa2ff);
-    const auto indicatorOff = juce::Colour (0xff1c212b);
 
     const auto inputCounter = processor.getInputNoteOnCounter();
     if (inputCounter != lastInputNoteOnCounter)
@@ -1231,8 +1276,7 @@ void PluginEditor::timerCallback()
     }
 
     const bool inputActive = (nowMs - lastInputFlashMs) <= 120.0;
-    inputLabel.setColour (juce::Label::backgroundColourId,
-        inputActive ? indicatorBlueBright : indicatorOff);
+    inputIndicator.setActive (inputActive);
 
     const auto outputCounter = processor.getOutputNoteOnCounter();
     if (outputCounter != lastOutputNoteOnCounter)
@@ -1242,8 +1286,7 @@ void PluginEditor::timerCallback()
     }
 
     const bool outputActive = (nowMs - lastOutputFlashMs) <= 120.0;
-    outputLabel.setColour (juce::Label::backgroundColourId,
-        outputActive ? indicatorBlueBright : indicatorBlue);
+    outputIndicator.setActive (outputActive);
 
     correctionDisplay.setValues (processor.getLastTimingDeltaMs(),
         processor.getLastNoteOffDeltaMs(),

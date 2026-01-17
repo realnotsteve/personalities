@@ -30,6 +30,20 @@ private:
         juce::Colour inactiveColour = juce::Colours::darkgrey;
     };
 
+    class ImageIndicator final : public juce::Component
+    {
+    public:
+        void paint (juce::Graphics&) override;
+        void setActive (bool shouldBeActive);
+        void setImages (juce::Image activeImage, juce::Image inactiveImage);
+        bool hasImages() const noexcept { return activeImage.isValid() || inactiveImage.isValid(); }
+
+    private:
+        bool active = false;
+        juce::Image activeImage;
+        juce::Image inactiveImage;
+    };
+
     class CorrectionDisplay final : public juce::Component
     {
     public:
@@ -122,8 +136,8 @@ private:
     juce::Slider pitchToleranceSlider;
     juce::Label  pitchToleranceLabel;
     juce::Label buildInfoLabel;
-    juce::Label inputLabel;
-    juce::Label outputLabel;
+    ImageIndicator inputIndicator;
+    ImageIndicator outputIndicator;
     juce::Label timingLabel;
     juce::Label timingValueLabel;
     juce::Label transportLabel;
@@ -151,6 +165,10 @@ private:
     juce::Image openButtonImage;
     juce::Image performerDropdownImage;
     juce::Image effectStrengthHandleImage;
+    juce::Image midiInActiveImage;
+    juce::Image midiInInactiveImage;
+    juce::Image midiOutActiveImage;
+    juce::Image midiOutInactiveImage;
     bool isExpanded = false;
     bool overlayEnabled = false;
     bool boundsOverlayEnabled = false;
