@@ -27,6 +27,9 @@ juce_add_binary_data(PersonalitiesAssets
         assets/gui/mode-none/widgets/indicator-midi_in/indicator-midi_in-active-x1368y100.png
         assets/gui/mode-none/widgets/indicator-midi_out/indicator-midi_out-inactive-x1368y148.png
         assets/gui/mode-none/widgets/indicator-midi_out/indicator-midi_out-active-x1368y148.png
+        assets/gui/mode-none/widgets/indicator-develop_mode/indicator-developer_mode-x1112y36.png
+        assets/gui/mode-none/widgets/button-open_developer_console/button-open_developer_console-off-x1338y22.png
+        assets/gui/mode-none/widgets/button-open_developer_console/button-open_developer_console-on-x1338y22.png
         assets/gui/mode-none/widgets/button-mute/button-mute-off-x1026y108.png
         assets/gui/mode-none/widgets/button-mute/button-mute-on-x1026y108.png
         assets/gui/mode-none/widgets/button-bypass/button-bypass-off-x1026y144.png

@@ -155,6 +155,10 @@ private:
     void rebuildReferenceList();
     void resetParametersToDefaults();
     void resetPluginState();
+    void setDeveloperModeActive (bool shouldBeActive);
+    void setDeveloperConsoleOpen (bool shouldBeOpen);
+    void updateDeveloperModeFade (double nowMs);
+    void updateDeveloperOverlayComponents();
 
     PluginProcessor& processor;
 
@@ -170,7 +174,6 @@ private:
     juce::TextButton actualiserTabButton;
     juce::GroupComponent tabContainer;
     juce::GroupComponent developerBox;
-    juce::TextButton developerToggle;
     CorrectionDisplay correctionDisplay;
     DeveloperPanelBackdrop developerPanelBackdrop;
 
@@ -208,6 +211,7 @@ private:
     juce::TextButton copyLogButton;
     juce::ToggleButton tempoShiftButton;
     juce::ToggleButton velocityButton;
+    ImageToggleButton developerConsoleButton;
     ImageToggleButton muteButton;
     ImageToggleButton bypassButton;
     ImageMomentaryButton resetButton;
@@ -224,6 +228,9 @@ private:
     juce::Image bypassOnImage;
     juce::Image bypassOffImage;
     juce::Image modeDropdownImage;
+    juce::Image developerModeIndicatorImage;
+    juce::Image developerConsoleButtonOffImage;
+    juce::Image developerConsoleButtonOnImage;
     juce::Image resetButtonImage;
     juce::Image tooltipsCheckboxImage;
     juce::Image midiInActiveImage;
@@ -233,8 +240,13 @@ private:
     bool isExpanded = false;
     bool overlayEnabled = false;
     bool boundsOverlayEnabled = false;
+    bool developerModeActive = false;
+    bool developerConsoleOpen = false;
     bool hasMousePosition = false;
     juce::Point<int> lastMousePosition;
+    float developerModeAlpha = 0.0f;
+    float developerModeTargetAlpha = 0.0f;
+    double lastDeveloperFadeMs = 0.0;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> slackAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> clusterWindowAttachment;

@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.38 (2026-01-17)
+
+- **Summary:** PERSONALITIES (PRISM): Update 3 areas (e.g., CMakeLists.txt)
+- **Files:**
+  - `CMakeLists.txt`
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `assets/gui/mode-closed/background/background-closed-x0y0.png`
+  - `assets/gui/mode-open/background/background-open-x0y0.png`
+
 ## v0.0.37 (2026-01-17)
 
 - **Summary:** PERSONALITIES (PRISM): Update 3 areas (e.g., CMakeLists.txt)

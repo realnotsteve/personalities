@@ -26,10 +26,22 @@ namespace
     constexpr int kResetY = 958;
     constexpr int kTooltipsX = 262;
     constexpr int kTooltipsY = 962;
+    constexpr int kDeveloperIndicatorX = 1112;
+    constexpr int kDeveloperIndicatorY = 36;
+    constexpr int kDeveloperConsoleButtonX = 1338;
+    constexpr int kDeveloperConsoleButtonY = 22;
+    constexpr int kDeveloperConsoleX = 532;
+    constexpr int kDeveloperConsoleY = 336;
+    constexpr int kDeveloperConsoleW = 824;
+    constexpr int kDeveloperConsoleH = 526;
+    constexpr int kDeveloperConsolePadding = 20;
+    constexpr int kBuildInfoX = 602;
+    constexpr int kBuildInfoY = 160;
     constexpr float kDropdownFontSize = 11.0f;
     constexpr const char* kPreferredDisplayFontName = "SF Pro Display";
     constexpr const char* kFallbackDisplayFontName = ".SF NS Display";
     constexpr const char* kFallbackDisplayFontNameAlt = "SF Pro Text";
+    constexpr double kDeveloperFadeDurationMs = 500.0;
     constexpr const char* kParamDelayMs = "delay_ms";
     constexpr const char* kParamClusterWindowMs = "match_window_ms";
     constexpr const char* kParamCorrection = "correction";
@@ -62,6 +74,13 @@ namespace
     juce::Font makeDisplayFont (float size)
     {
         return juce::Font (juce::FontOptions (getDisplayFontName(), size, juce::Font::plain));
+    }
+
+    int measureTextWidth (const juce::Font& font, const juce::String& text)
+    {
+        juce::GlyphArrangement glyphs;
+        glyphs.addLineOfText (font, text, 0.0f, 0.0f);
+        return static_cast<int> (std::ceil (glyphs.getBoundingBox (0, -1, true).getWidth()));
     }
 }
 
@@ -419,11 +438,29 @@ juce::Font PluginEditor::DropdownLookAndFeel::getPopupMenuFont()
     return makeDisplayFont (kDropdownFontSize);
 }
 
-void PluginEditor::DropdownLookAndFeel::drawComboBox (juce::Graphics&,
-                                                      int, int, bool,
+void PluginEditor::DropdownLookAndFeel::drawComboBox (juce::Graphics& g,
+                                                      int width, int height, bool,
                                                       int, int, int, int,
-                                                      juce::ComboBox&)
+                                                      juce::ComboBox& box)
 {
+    if (box.getComponentID() != "performerDropdown")
+        return;
+
+    const auto bounds = juce::Rectangle<float> (0.0f, 0.0f, static_cast<float> (width),
+        static_cast<float> (height));
+    const auto arrowZone = bounds.withLeft (bounds.getRight() - bounds.getHeight());
+    const float arrowWidth = arrowZone.getWidth() * 0.5f;
+    const float arrowHeight = arrowZone.getHeight() * 0.3f;
+    const float arrowX = arrowZone.getX() + (arrowZone.getWidth() - arrowWidth) * 0.5f;
+    const float arrowY = arrowZone.getCentreY() - arrowHeight * 0.5f;
+
+    juce::Path path;
+    path.addTriangle (arrowX, arrowY,
+        arrowX + arrowWidth, arrowY,
+        arrowX + arrowWidth * 0.5f, arrowY + arrowHeight);
+
+    g.setColour (box.findColour (juce::ComboBox::textColourId));
+    g.fillPath (path);
 }
 
 juce::Label* PluginEditor::DropdownLookAndFeel::createComboBoxTextBox (juce::ComboBox& box)
@@ -547,8 +584,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         BinaryData::dropdown_menuperformer_selectorx176y718_png,
         BinaryData::dropdown_menuperformer_selectorx176y718_pngSize);
     effectStrengthHandleImage = juce::ImageCache::getFromMemory (
-        BinaryData::slidereffect_strengthx82y818_0_x410y818_100_png,
-        BinaryData::slidereffect_strengthx82y818_0_x410y818_100_pngSize);
+        BinaryData::slidereffect_strengthx82y818_0x410y818_100_png,
+        BinaryData::slidereffect_strengthx82y818_0x410y818_100_pngSize);
     muteOffImage = juce::ImageCache::getFromMemory (
         BinaryData::buttonmuteoffx1026y108_png,
         BinaryData::buttonmuteoffx1026y108_pngSize);
@@ -564,6 +601,15 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     modeDropdownImage = juce::ImageCache::getFromMemory (
         BinaryData::dropdownmodeselectorx1188y118_png,
         BinaryData::dropdownmodeselectorx1188y118_pngSize);
+    developerModeIndicatorImage = juce::ImageCache::getFromMemory (
+        BinaryData::indicatordeveloper_modex1112y36_png,
+        BinaryData::indicatordeveloper_modex1112y36_pngSize);
+    developerConsoleButtonOffImage = juce::ImageCache::getFromMemory (
+        BinaryData::buttonopen_developer_consoleoffx1338y22_png,
+        BinaryData::buttonopen_developer_consoleoffx1338y22_pngSize);
+    developerConsoleButtonOnImage = juce::ImageCache::getFromMemory (
+        BinaryData::buttonopen_developer_consoleonx1338y22_png,
+        BinaryData::buttonopen_developer_consoleonx1338y22_pngSize);
     resetButtonImage = juce::ImageCache::getFromMemory (
         BinaryData::buttonresetx20y958_png,
         BinaryData::buttonresetx20y958_pngSize);
@@ -619,18 +665,12 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     developerBox.setInterceptsMouseClicks (false, false);
     addAndMakeVisible (developerBox);
 
-    developerToggle.setButtonText ("DEV");
-    developerToggle.setClickingTogglesState (true);
-    developerToggle.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff2a2f36));
-    developerToggle.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff4b5563));
-    developerToggle.setColour (juce::TextButton::textColourOffId, juce::Colours::white);
-    addAndMakeVisible (developerToggle);
-
     developerPanelBackdrop.setInterceptsMouseClicks (false, false);
     addAndMakeVisible (developerPanelBackdrop);
 
     addAndMakeVisible (correctionDisplay);
 
+    referenceBox.setComponentID ("performerDropdown");
     referenceBox.setLookAndFeel (&dropdownLookAndFeel);
     addAndMakeVisible (referenceBox);
     rebuildReferenceList();
@@ -881,6 +921,17 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     tooltipsCheckbox.setImage (tooltipsCheckboxImage);
     addAndMakeVisible (tooltipsCheckbox);
 
+    developerConsoleButton.setImages (developerConsoleButtonOnImage, developerConsoleButtonOffImage);
+    developerConsoleButton.setClickingTogglesState (true);
+    developerConsoleButton.setToggleState (false, juce::dontSendNotification);
+    developerConsoleButton.setAlpha (0.0f);
+    developerConsoleButton.setVisible (false);
+    developerConsoleButton.onClick = [this]()
+    {
+        setDeveloperConsoleOpen (developerConsoleButton.getToggleState());
+    };
+    addAndMakeVisible (developerConsoleButton);
+
     expandButton.onClick = [this]
     {
         isExpanded = true;
@@ -912,14 +963,6 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         processor.apvts, kParamBypass, bypassButton);
     tempoShiftAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         processor.apvts, kParamTempoShiftBackBar, tempoShiftButton);
-
-    developerToggle.setToggleState (false, juce::dontSendNotification);
-    developerToggle.onClick = [this]()
-    {
-        developerToggle.setButtonText (developerToggle.getToggleState() ? "X" : "DEV");
-        updateUiVisibility();
-        resized();
-    };
 
     auto applyClusterWindow = [this]
     {
@@ -993,8 +1036,8 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     juce::String buildInfoText = "v";
     buildInfoText << PERSONALITIES_VERSION_STRING << " | built " << PERSONALITIES_BUILD_TIMESTAMP;
     buildInfoLabel.setText (buildInfoText, juce::dontSendNotification);
-    buildInfoLabel.setJustificationType (juce::Justification::centredRight);
-    buildInfoLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
+    buildInfoLabel.setJustificationType (juce::Justification::centredLeft);
+    buildInfoLabel.setColour (juce::Label::textColourId, juce::Colours::white);
     buildInfoLabel.setFont (makeDisplayFont (10.0f));
     addAndMakeVisible (buildInfoLabel);
 
@@ -1002,6 +1045,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     lastInputFlashMs = juce::Time::getMillisecondCounterHiRes();
     lastOutputNoteOnCounter = processor.getOutputNoteOnCounter();
     lastOutputFlashMs = lastInputFlashMs;
+    lastDeveloperFadeMs = lastInputFlashMs;
     lastTimingDeltaMs = processor.getLastTimingDeltaMs();
     const juce::String timingPrefix = (lastTimingDeltaMs > 0.0f) ? "+" : "";
     timingValueLabel.setText (timingPrefix + juce::String (lastTimingDeltaMs, 2),
@@ -1092,6 +1136,18 @@ void PluginEditor::paint (juce::Graphics& g)
         g.drawImage (modeDropdownImage, dest);
     }
 
+    if (isExpanded && developerModeIndicatorImage.isValid() && developerModeAlpha > 0.0f)
+    {
+        juce::Graphics::ScopedSaveState state (g);
+        g.setOpacity (developerModeAlpha);
+        const auto dest = juce::Rectangle<float> (
+            kDeveloperIndicatorX * kAssetScale,
+            kDeveloperIndicatorY * kAssetScale,
+            developerModeIndicatorImage.getWidth() * kAssetScale,
+            developerModeIndicatorImage.getHeight() * kAssetScale);
+        g.drawImage (developerModeIndicatorImage, dest);
+    }
+
     if (isExpanded && performerDropdownImage.isValid())
     {
         const auto dest = juce::Rectangle<float> (
@@ -1167,7 +1223,6 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     drawBounds (referenceBox, "referenceBox");
     drawBounds (correctionSlider, "correctionSlider");
     drawBounds (correctionDisplay, "correctionDisplay");
-    drawBounds (developerToggle, "developerToggle");
     drawBounds (developerPanelBackdrop, "developerPanelBackdrop");
     drawBounds (expandButton, "expandButton");
     drawBounds (slackSlider, "slackSlider");
@@ -1203,6 +1258,7 @@ void PluginEditor::paintOverChildren (juce::Graphics& g)
     drawBounds (bypassButton, "bypassButton");
     drawBounds (resetButton, "resetButton");
     drawBounds (tooltipsCheckbox, "tooltipsCheckbox");
+    drawBounds (developerConsoleButton, "developerConsoleButton");
     drawBounds (modeBox, "modeBox");
     drawBounds (inputIndicator, "inputIndicator");
     drawBounds (outputIndicator, "outputIndicator");
@@ -1296,6 +1352,11 @@ void PluginEditor::resized()
     {
         modeBox.setBounds (scaleRect (590, 60, 76, 20));
     }
+    if (developerConsoleButtonOffImage.isValid())
+    {
+        developerConsoleButton.setBounds (assetRect (kDeveloperConsoleButtonX, kDeveloperConsoleButtonY,
+            developerConsoleButtonOffImage.getWidth(), developerConsoleButtonOffImage.getHeight()));
+    }
     if (midiInInactiveImage.isValid())
     {
         inputIndicator.setBounds (assetRect (kMidiInX, kMidiInY,
@@ -1341,29 +1402,29 @@ void PluginEditor::resized()
     correctionDisplay.setBounds (scaleRect (rightPanelX + 16, rightPanelY + 12,
         rightPanelW - 32, rightPanelH - 24));
 
-    developerToggle.setBounds (scaleRect (512, 32, 32, 14));
-
-    const auto devPanelBounds = scaleRect (rightPanelX + 10, rightPanelY + 10,
-        rightPanelW - 20, rightPanelH - 20);
+    const auto devPanelBounds = assetRect (kDeveloperConsoleX, kDeveloperConsoleY,
+        kDeveloperConsoleW, kDeveloperConsoleH);
     developerPanelBackdrop.setBounds (devPanelBounds);
 
-    const int panelX = devPanelBounds.getX();
-    const int panelY = devPanelBounds.getY();
-    const int panelW = devPanelBounds.getWidth();
+    const int padding = juce::roundToInt (kDeveloperConsolePadding * kAssetScale);
+    const auto contentBounds = devPanelBounds.reduced (padding);
 
     const int rowHeight = juce::roundToInt (18.0f * scaleY);
-    const int rowGap = juce::roundToInt (4.0f * scaleY);
-    const int columnGap = juce::roundToInt (8.0f * (scaleX + scaleY) * 0.5f);
-    const int columnWidth = (panelW - columnGap) / 2;
-    const int labelWidth = juce::roundToInt (110.0f * scaleX);
-    const int sliderGap = juce::roundToInt (6.0f * scaleX);
+    const int rowGap = juce::roundToInt (6.0f * scaleY);
+    const int columnGap = juce::roundToInt (12.0f * scaleX);
+    const int columnWidth = (contentBounds.getWidth() - columnGap) / 2;
+    const int sliderGap = juce::roundToInt (8.0f * scaleX);
+    const int labelWidth = juce::jlimit (60,
+        columnWidth - sliderGap - 40,
+        juce::roundToInt (120.0f * scaleX));
 
-    referenceStatusLabel.setBounds (panelX + sliderGap, panelY + rowGap,
-        panelW - sliderGap * 2, rowHeight);
+    referenceStatusLabel.setBounds (contentBounds.getX(), contentBounds.getY(),
+        contentBounds.getWidth(), rowHeight);
 
-    int leftY = panelY + rowHeight + rowGap * 2;
-    const int leftX = panelX;
-    const int rightX = panelX + columnWidth + columnGap;
+    int leftY = contentBounds.getY() + rowHeight + rowGap;
+    int rightY = leftY;
+    const int leftX = contentBounds.getX();
+    const int rightX = contentBounds.getX() + columnWidth + columnGap;
 
     auto placeSliderRow = [&](juce::Label& label, juce::Slider& slider)
     {
@@ -1379,15 +1440,15 @@ void PluginEditor::resized()
     placeSliderRow (extraNoteBudgetLabel, extraNoteBudgetSlider);
     placeSliderRow (pitchToleranceLabel, pitchToleranceSlider);
 
-    const int toggleWidth = (columnWidth - columnGap) / 2;
+    const int toggleGap = juce::roundToInt (6.0f * scaleX);
+    const int toggleWidth = (columnWidth - toggleGap) / 2;
     tempoShiftButton.setBounds (leftX, leftY, toggleWidth, rowHeight);
-    velocityButton.setBounds (leftX + toggleWidth + columnGap, leftY, toggleWidth, rowHeight);
+    velocityButton.setBounds (leftX + toggleWidth + toggleGap, leftY, toggleWidth, rowHeight);
     leftY += rowHeight + rowGap;
     resetStartOffsetButton.setBounds (leftX, leftY, columnWidth, rowHeight);
     leftY += rowHeight + rowGap;
     copyLogButton.setBounds (leftX, leftY, columnWidth, rowHeight);
 
-    int rightY = panelY + rowHeight + rowGap * 2;
     auto placeValueRow = [&](juce::Label& label, juce::Label& value)
     {
         label.setBounds (rightX, rightY, labelWidth, rowHeight);
@@ -1404,11 +1465,27 @@ void PluginEditor::resized()
     placeValueRow (refIoiLabel, refIoiValueLabel);
     placeValueRow (startOffsetLabel, startOffsetValueLabel);
 
-    buildInfoLabel.setBounds (scaleRect (380, 14, 320, 12));
+    const int buildInfoX = juce::roundToInt (kBuildInfoX * kAssetScale);
+    const int buildInfoY = juce::roundToInt (kBuildInfoY * kAssetScale);
+    const int buildInfoWidth = measureTextWidth (buildInfoLabel.getFont(), buildInfoLabel.getText()) + 6;
+    const int buildInfoHeight = juce::roundToInt (buildInfoLabel.getFont().getHeight() + 4.0f);
+    buildInfoLabel.setBounds (buildInfoX, buildInfoY,
+        juce::jmax (1, juce::jmin (buildInfoWidth, getWidth() - buildInfoX - 4)),
+        buildInfoHeight);
 }
 
 bool PluginEditor::keyPressed (const juce::KeyPress& key)
 {
+    const auto modifiers = key.getModifiers();
+    const auto keyCode = key.getKeyCode();
+    if ((keyCode == 'd' || keyCode == 'D')
+        && modifiers.isCommandDown()
+        && modifiers.isShiftDown())
+    {
+        setDeveloperModeActive (! developerModeActive);
+        return true;
+    }
+
     const auto keyChar = key.getTextCharacter();
     if (keyChar == 'o' || keyChar == 'O')
     {
@@ -1442,58 +1519,126 @@ void PluginEditor::mouseDrag (const juce::MouseEvent& event)
 
 void PluginEditor::updateUiVisibility()
 {
-    const bool showDeveloper = developerToggle.getToggleState();
-    developerToggle.setButtonText (showDeveloper ? "X" : "DEV");
+    const bool showDeveloperConsole = developerModeActive && developerConsoleOpen;
 
     expandButton.setVisible (! isExpanded);
     referenceBox.setVisible (isExpanded);
     correctionSlider.setVisible (isExpanded);
-    correctionDisplay.setVisible (isExpanded && ! showDeveloper);
+    correctionDisplay.setVisible (isExpanded && ! showDeveloperConsole);
 
     referenceLabel.setVisible (false);
     correctionLabel.setVisible (false);
     referenceLoadedIndicator.setVisible (false);
     tabContainer.setVisible (false);
     developerBox.setVisible (false);
-    developerToggle.setVisible (isExpanded);
-    developerPanelBackdrop.setVisible (isExpanded && showDeveloper);
+    developerPanelBackdrop.setVisible (isExpanded && showDeveloperConsole);
     virtuosoTabButton.setVisible (false);
     influencerTabButton.setVisible (false);
     actualiserTabButton.setVisible (false);
 
-    referenceStatusLabel.setVisible (isExpanded && showDeveloper);
-    slackLabel.setVisible (isExpanded && showDeveloper);
-    slackSlider.setVisible (isExpanded && showDeveloper);
-    clusterWindowLabel.setVisible (isExpanded && showDeveloper);
-    clusterWindowSlider.setVisible (isExpanded && showDeveloper);
-    missingTimeoutLabel.setVisible (isExpanded && showDeveloper);
-    missingTimeoutSlider.setVisible (isExpanded && showDeveloper);
-    extraNoteBudgetLabel.setVisible (isExpanded && showDeveloper);
-    extraNoteBudgetSlider.setVisible (isExpanded && showDeveloper);
-    pitchToleranceLabel.setVisible (isExpanded && showDeveloper);
-    pitchToleranceSlider.setVisible (isExpanded && showDeveloper);
-    timingLabel.setVisible (isExpanded && showDeveloper);
-    timingValueLabel.setVisible (isExpanded && showDeveloper);
-    transportLabel.setVisible (isExpanded && showDeveloper);
-    transportValueLabel.setVisible (isExpanded && showDeveloper);
-    matchLabel.setVisible (isExpanded && showDeveloper);
-    matchValueLabel.setVisible (isExpanded && showDeveloper);
-    cpuLabel.setVisible (isExpanded && showDeveloper);
-    cpuValueLabel.setVisible (isExpanded && showDeveloper);
-    bpmLabel.setVisible (isExpanded && showDeveloper);
-    bpmValueLabel.setVisible (isExpanded && showDeveloper);
-    refIoiLabel.setVisible (isExpanded && showDeveloper);
-    refIoiValueLabel.setVisible (isExpanded && showDeveloper);
-    startOffsetLabel.setVisible (isExpanded && showDeveloper);
-    startOffsetValueLabel.setVisible (isExpanded && showDeveloper);
-    resetStartOffsetButton.setVisible (isExpanded && showDeveloper);
-    copyLogButton.setVisible (isExpanded && showDeveloper);
-    tempoShiftButton.setVisible (isExpanded && showDeveloper);
-    velocityButton.setVisible (isExpanded && showDeveloper);
+    referenceStatusLabel.setVisible (isExpanded && showDeveloperConsole);
+    slackLabel.setVisible (isExpanded && showDeveloperConsole);
+    slackSlider.setVisible (isExpanded && showDeveloperConsole);
+    clusterWindowLabel.setVisible (isExpanded && showDeveloperConsole);
+    clusterWindowSlider.setVisible (isExpanded && showDeveloperConsole);
+    missingTimeoutLabel.setVisible (isExpanded && showDeveloperConsole);
+    missingTimeoutSlider.setVisible (isExpanded && showDeveloperConsole);
+    extraNoteBudgetLabel.setVisible (isExpanded && showDeveloperConsole);
+    extraNoteBudgetSlider.setVisible (isExpanded && showDeveloperConsole);
+    pitchToleranceLabel.setVisible (isExpanded && showDeveloperConsole);
+    pitchToleranceSlider.setVisible (isExpanded && showDeveloperConsole);
+    timingLabel.setVisible (isExpanded && showDeveloperConsole);
+    timingValueLabel.setVisible (isExpanded && showDeveloperConsole);
+    transportLabel.setVisible (isExpanded && showDeveloperConsole);
+    transportValueLabel.setVisible (isExpanded && showDeveloperConsole);
+    matchLabel.setVisible (isExpanded && showDeveloperConsole);
+    matchValueLabel.setVisible (isExpanded && showDeveloperConsole);
+    cpuLabel.setVisible (isExpanded && showDeveloperConsole);
+    cpuValueLabel.setVisible (isExpanded && showDeveloperConsole);
+    bpmLabel.setVisible (isExpanded && showDeveloperConsole);
+    bpmValueLabel.setVisible (isExpanded && showDeveloperConsole);
+    refIoiLabel.setVisible (isExpanded && showDeveloperConsole);
+    refIoiValueLabel.setVisible (isExpanded && showDeveloperConsole);
+    startOffsetLabel.setVisible (isExpanded && showDeveloperConsole);
+    startOffsetValueLabel.setVisible (isExpanded && showDeveloperConsole);
+    resetStartOffsetButton.setVisible (isExpanded && showDeveloperConsole);
+    copyLogButton.setVisible (isExpanded && showDeveloperConsole);
+    tempoShiftButton.setVisible (isExpanded && showDeveloperConsole);
+    velocityButton.setVisible (isExpanded && showDeveloperConsole);
 
-    buildInfoLabel.setVisible (true);
     resetButton.setVisible (true);
     tooltipsCheckbox.setVisible (true);
+
+    updateDeveloperOverlayComponents();
+}
+
+void PluginEditor::setDeveloperModeActive (bool shouldBeActive)
+{
+    if (developerModeActive == shouldBeActive)
+        return;
+
+    developerModeActive = shouldBeActive;
+    developerModeTargetAlpha = developerModeActive ? 1.0f : 0.0f;
+
+    if (! developerModeActive)
+    {
+        developerConsoleOpen = false;
+        developerConsoleButton.setToggleState (false, juce::dontSendNotification);
+    }
+
+    updateUiVisibility();
+    resized();
+    repaint();
+}
+
+void PluginEditor::setDeveloperConsoleOpen (bool shouldBeOpen)
+{
+    const bool nextState = developerModeActive && shouldBeOpen;
+    if (developerConsoleOpen == nextState)
+        return;
+
+    developerConsoleOpen = nextState;
+    developerConsoleButton.setToggleState (developerConsoleOpen, juce::dontSendNotification);
+    updateUiVisibility();
+    resized();
+    repaint();
+}
+
+void PluginEditor::updateDeveloperModeFade (double nowMs)
+{
+    if (lastDeveloperFadeMs <= 0.0)
+        lastDeveloperFadeMs = nowMs;
+
+    const double deltaMs = nowMs - lastDeveloperFadeMs;
+    lastDeveloperFadeMs = nowMs;
+
+    if (deltaMs <= 0.0)
+        return;
+
+    if (developerModeAlpha == developerModeTargetAlpha)
+        return;
+
+    const float step = static_cast<float> (deltaMs / kDeveloperFadeDurationMs);
+    if (developerModeTargetAlpha > developerModeAlpha)
+        developerModeAlpha = juce::jmin (developerModeTargetAlpha, developerModeAlpha + step);
+    else
+        developerModeAlpha = juce::jmax (developerModeTargetAlpha, developerModeAlpha - step);
+
+    updateDeveloperOverlayComponents();
+    repaint();
+}
+
+void PluginEditor::updateDeveloperOverlayComponents()
+{
+    const float alpha = developerModeAlpha * (isExpanded ? 1.0f : 0.0f);
+    const bool showButton = isExpanded
+        && (developerModeAlpha > 0.0f || developerModeTargetAlpha > 0.0f);
+    developerConsoleButton.setVisible (showButton);
+    developerConsoleButton.setEnabled (developerModeActive);
+    developerConsoleButton.setAlpha (alpha);
+
+    buildInfoLabel.setVisible (showButton);
+    buildInfoLabel.setAlpha (alpha * 0.5f);
 }
 
 void PluginEditor::rebuildReferenceList()
@@ -1562,8 +1707,11 @@ void PluginEditor::resetPluginState()
 
     resetParametersToDefaults();
 
-    developerToggle.setToggleState (false, juce::dontSendNotification);
-    developerToggle.setButtonText ("DEV");
+    developerModeActive = false;
+    developerConsoleOpen = false;
+    developerModeAlpha = 0.0f;
+    developerModeTargetAlpha = 0.0f;
+    developerConsoleButton.setToggleState (false, juce::dontSendNotification);
 
     rebuildReferenceList();
     referenceLoadedIndicator.setActive (false);
@@ -1595,6 +1743,7 @@ void PluginEditor::resetPluginState()
 void PluginEditor::timerCallback()
 {
     const auto nowMs = juce::Time::getMillisecondCounterHiRes();
+    updateDeveloperModeFade (nowMs);
 
     const auto inputCounter = processor.getInputNoteOnCounter();
     if (inputCounter != lastInputNoteOnCounter)
