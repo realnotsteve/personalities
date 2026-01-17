@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.0.36 (2026-01-16)
+
+- **Summary:** PERSONALITIES (PRISM): Update Source
+- **Files:**
+  - `Source/PluginEditor.cpp`
+
 ## v0.0.35 (2026-01-16)
 
 - **Summary:** PERSONALITIES (PRISM): Update Source, assets

@@ -392,6 +392,16 @@ void PluginEditor::InfluenceSliderLookAndFeel::drawLinearSlider (juce::Graphics&
         g.setOpacity (0.5f);
     g.drawImage (handleImage, handleX, handleY, handleWidth, handleHeight,
                  0, 0, handleImage.getWidth(), handleImage.getHeight());
+
+    const int percent = juce::jlimit (0, 100, static_cast<int> (std::lround (slider.getValue() * 100.0)));
+    g.setColour (juce::Colours::white);
+    g.setFont (makeDisplayFont (juce::jlimit (8.0f, 12.0f, handleHeight * 0.6f)));
+    g.drawFittedText (juce::String (percent) + "%", juce::Rectangle<int> (
+            juce::roundToInt (handleX),
+            juce::roundToInt (handleY),
+            juce::roundToInt (handleWidth),
+            juce::roundToInt (handleHeight)),
+        juce::Justification::centred, 1);
 }
 
 void PluginEditor::InfluenceSliderLookAndFeel::setHandleImage (juce::Image image)
@@ -1516,13 +1526,13 @@ void PluginEditor::rebuildReferenceList()
     {
         referenceBox.setTextWhenNothingSelected (kChooseLabel);
         referenceBox.setSelectedId (0, juce::dontSendNotification);
-        referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
+        referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::white);
         referenceBox.setEnabled (false);
     }
     else
     {
         referenceBox.setTextWhenNothingSelected (kChooseLabel);
-        referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
+        referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::white);
         referenceBox.setEnabled (true);
     }
 
@@ -1561,7 +1571,7 @@ void PluginEditor::resetPluginState()
         juce::dontSendNotification);
 
     referenceBox.setSelectedId (0, juce::dontSendNotification);
-    referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
+    referenceBox.setColour (juce::ComboBox::textColourId, juce::Colours::white);
 
     modeBox.setSelectedId (0, juce::dontSendNotification);
     modeBox.setColour (juce::ComboBox::textColourId, juce::Colours::lightgrey);
