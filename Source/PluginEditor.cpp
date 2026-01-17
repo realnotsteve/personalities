@@ -353,6 +353,19 @@ void PluginEditor::ExpandButton::setImage (juce::Image image)
     repaint();
 }
 
+void PluginEditor::ExpandButton::setKeyHandler (std::function<bool (const juce::KeyPress&)> handler)
+{
+    keyHandler = std::move (handler);
+}
+
+bool PluginEditor::ExpandButton::keyPressed (const juce::KeyPress& key)
+{
+    if (keyHandler && keyHandler (key))
+        return true;
+
+    return juce::Button::keyPressed (key);
+}
+
 void PluginEditor::DeveloperPanelBackdrop::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
@@ -940,6 +953,10 @@ PluginEditor::PluginEditor (PluginProcessor& p)
         resized();
         repaint();
     };
+    expandButton.setKeyHandler ([this] (const juce::KeyPress& key)
+    {
+        return handleDeveloperShortcut (key);
+    });
     expandButton.setExpanded (isExpanded);
     addAndMakeVisible (expandButton);
 
@@ -1476,15 +1493,8 @@ void PluginEditor::resized()
 
 bool PluginEditor::keyPressed (const juce::KeyPress& key)
 {
-    const auto modifiers = key.getModifiers();
-    const auto keyCode = key.getKeyCode();
-    if ((keyCode == 'd' || keyCode == 'D')
-        && modifiers.isCommandDown()
-        && modifiers.isShiftDown())
-    {
-        setDeveloperModeActive (! developerModeActive);
+    if (handleDeveloperShortcut (key))
         return true;
-    }
 
     const auto keyChar = key.getTextCharacter();
     if (keyChar == 'o' || keyChar == 'O')
@@ -1498,6 +1508,21 @@ bool PluginEditor::keyPressed (const juce::KeyPress& key)
     {
         boundsOverlayEnabled = ! boundsOverlayEnabled;
         repaint();
+        return true;
+    }
+
+    return false;
+}
+
+bool PluginEditor::handleDeveloperShortcut (const juce::KeyPress& key)
+{
+    const auto modifiers = key.getModifiers();
+    const auto keyCode = key.getKeyCode();
+    if ((keyCode == 'd' || keyCode == 'D')
+        && modifiers.isCommandDown()
+        && modifiers.isShiftDown())
+    {
+        setDeveloperModeActive (! developerModeActive);
         return true;
     }
 

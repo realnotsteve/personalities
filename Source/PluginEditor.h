@@ -83,11 +83,14 @@ private:
         ExpandButton();
         void setExpanded (bool shouldBeExpanded);
         void setImage (juce::Image image);
+        void setKeyHandler (std::function<bool (const juce::KeyPress&)> handler);
 
     private:
         void paintButton (juce::Graphics&, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
+        bool keyPressed (const juce::KeyPress& key) override;
         bool isExpanded = false;
         juce::Image buttonImage;
+        std::function<bool (const juce::KeyPress&)> keyHandler;
     };
 
     class InfluenceSliderLookAndFeel final : public juce::LookAndFeel_V4
@@ -159,6 +162,7 @@ private:
     void setDeveloperConsoleOpen (bool shouldBeOpen);
     void updateDeveloperModeFade (double nowMs);
     void updateDeveloperOverlayComponents();
+    bool handleDeveloperShortcut (const juce::KeyPress& key);
 
     PluginProcessor& processor;
 
