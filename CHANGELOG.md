@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.0.46 (2026-01-17)
+
+- **Summary:** PERSONALITIES (PRISM): Update Source, assets
+- **Files:**
+  - `Source/PluginEditor.cpp`
+  - `Source/PluginEditor.h`
+  - `assets/gui/mode-closed/background/background-closed-x0y0.png`
+  - `assets/gui/mode-none/widgets/checkbox-tooltips/checkbox-tooltips-off-x262~y962.png`
+  - `assets/gui/mode-none/widgets/checkbox-tooltips/checkbox-tooltips-on-x262~y962.png`
+  - `assets/gui/mode-open/background/background-open-x0y0.png`
+  - `assets/gui/mode-open/small_panel/panel-small-closed-x66y322.png`
+  - `assets/gui/mode-open/small_panel/panel-small-open-x66y322.png`
+  - `assets/gui/mode-open/widgets/customise/button-reveal_customiser-off-x336y622.png`
+  - `assets/gui/mode-open/widgets/customise/button-reveal_customiser-on-x336y622.png`
+  - `assets/gui/mode-open/widgets/velocity-correction/checkbox-tooltips-off-x167~y422.png`
+  - `assets/gui/mode-open/widgets/velocity-correction/checkbox-tooltips-on-x167~y422.png`
+  - `assets/gui/mode-open/widgets/visualiser-selector/dropdown_menu-visualiser_selector.png`
+
 ## v0.0.45 (2026-01-17)
 
 - **Summary:** PERSONALITIES (PRISM): Update Source

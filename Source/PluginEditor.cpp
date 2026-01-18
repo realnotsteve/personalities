@@ -901,9 +901,10 @@ PluginEditor::ImageCheckboxButton::ImageCheckboxButton()
 {
 }
 
-void PluginEditor::ImageCheckboxButton::setImage (juce::Image imageIn)
+void PluginEditor::ImageCheckboxButton::setImages (juce::Image offImageIn, juce::Image onImageIn)
 {
-    image = std::move (imageIn);
+    offImage = std::move (offImageIn);
+    onImage = std::move (onImageIn);
     repaint();
 }
 
@@ -913,17 +914,17 @@ void PluginEditor::ImageCheckboxButton::paintButton (juce::Graphics& g,
 {
     juce::ignoreUnused (shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
 
+    const auto& image = getToggleState() ? onImage : offImage;
     if (! image.isValid())
+    {
+        const auto& fallback = getToggleState() ? offImage : onImage;
+        if (! fallback.isValid())
+            return;
+        g.drawImage (fallback, getLocalBounds().toFloat());
         return;
+    }
 
     g.drawImage (image, getLocalBounds().toFloat());
-
-    if (getToggleState())
-    {
-        auto checkBounds = getLocalBounds().reduced (1);
-        g.setColour (checkColour);
-        g.fillRect (checkBounds);
-    }
 }
 
 PluginEditor::PluginEditor (PluginProcessor& p)
@@ -970,9 +971,12 @@ PluginEditor::PluginEditor (PluginProcessor& p)
     resetButtonImage = juce::ImageCache::getFromMemory (
         BinaryData::buttonresetx20y958_png,
         BinaryData::buttonresetx20y958_pngSize);
-    tooltipsCheckboxImage = juce::ImageCache::getFromMemory (
-        BinaryData::checkboxtooltipsx262y962_png,
-        BinaryData::checkboxtooltipsx262y962_pngSize);
+    tooltipsCheckboxOffImage = juce::ImageCache::getFromMemory (
+        BinaryData::checkboxtooltipsoffx262y962_png,
+        BinaryData::checkboxtooltipsoffx262y962_pngSize);
+    tooltipsCheckboxOnImage = juce::ImageCache::getFromMemory (
+        BinaryData::checkboxtooltipsonx262y962_png,
+        BinaryData::checkboxtooltipsonx262y962_pngSize);
     midiInInactiveImage = juce::ImageCache::getFromMemory (
         BinaryData::indicatormidi_ininactivex1368y100_png,
         BinaryData::indicatormidi_ininactivex1368y100_pngSize);
@@ -1263,7 +1267,7 @@ PluginEditor::PluginEditor (PluginProcessor& p)
 
     tooltipsCheckbox.setClickingTogglesState (true);
     tooltipsCheckbox.setToggleState (false, juce::dontSendNotification);
-    tooltipsCheckbox.setImage (tooltipsCheckboxImage);
+    tooltipsCheckbox.setImages (tooltipsCheckboxOffImage, tooltipsCheckboxOnImage);
     addAndMakeVisible (tooltipsCheckbox);
 
     developerConsoleButton.setImages (developerConsoleButtonOnImage, developerConsoleButtonOffImage);
@@ -1650,10 +1654,10 @@ void PluginEditor::resized()
             resetButtonImage.getWidth(), resetButtonImage.getHeight()));
     }
 
-    if (tooltipsCheckboxImage.isValid())
+    if (tooltipsCheckboxOffImage.isValid())
     {
         tooltipsCheckbox.setBounds (assetRect (kTooltipsX, kTooltipsY,
-            tooltipsCheckboxImage.getWidth(), tooltipsCheckboxImage.getHeight()));
+            tooltipsCheckboxOffImage.getWidth(), tooltipsCheckboxOffImage.getHeight()));
     }
     if (modeDropdownImage.isValid())
     {

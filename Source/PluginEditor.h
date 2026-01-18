@@ -186,13 +186,12 @@ private:
     {
     public:
         ImageCheckboxButton();
-        void setImage (juce::Image image);
-        void setCheckColour (juce::Colour colour) { checkColour = colour; }
+        void setImages (juce::Image offImage, juce::Image onImage);
 
     private:
         void paintButton (juce::Graphics&, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
-        juce::Image image;
-        juce::Colour checkColour = juce::Colour (0xff555ed2);
+        juce::Image offImage;
+        juce::Image onImage;
     };
 
     void timerCallback() override;
@@ -280,7 +279,8 @@ private:
     juce::Image developerConsoleButtonOffImage;
     juce::Image developerConsoleButtonOnImage;
     juce::Image resetButtonImage;
-    juce::Image tooltipsCheckboxImage;
+    juce::Image tooltipsCheckboxOffImage;
+    juce::Image tooltipsCheckboxOnImage;
     juce::Image midiInActiveImage;
     juce::Image midiInInactiveImage;
     juce::Image midiOutActiveImage;
